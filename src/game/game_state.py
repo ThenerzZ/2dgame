@@ -27,58 +27,69 @@ class GameState:
         self.enemies = []
         self.shop = Shop()
         self.start_menu = StartMenu(self.shop, self.player)
+        
+        # Game state
+        self.state = GameStates.MENU
         self.score = 0
-        self.game_over = False
-        self.round_started = False
+        self.current_round = STARTING_ROUND
+        self.round_timer = ROUND_DURATION
+        self.transition_timer = 0
+        self.shop_timer = 0
+        self.items_bought_this_round = 0
         
         # Bonfire system
         self.bonfire_cooldowns = {pos: 0 for pos in self.terrain_gen.bonfire_positions}
-        
-        # Give initial money for start menu purchases
-        self.player.money = PLAYER_START_MONEY
 
-    def spawn_initial_enemies(self):
-        """Spawn initial enemies when round starts"""
+    def start_new_round(self):
+        """Initialize a new round"""
+        self.round_timer = ROUND_DURATION
         self.enemies.clear()
+        self.items_bought_this_round = 0
         
-        # Start with basic enemies
-        num_enemies = STARTING_ENEMIES
+        # Scale enemy stats based on round number
+        scaling = 1 + (self.current_round - 1) * ENEMY_SCALING_PER_ROUND
+        
+        # Spawn initial enemies
+        num_enemies = STARTING_ENEMIES + self.current_round - 1
         for _ in range(num_enemies):
-            # Higher chance for basic enemies at start
-            weights = [0.4, 0.3, 0.2, 0.05, 0.05]  # Skeleton, Slime, Spider, Demon, Ghost
-            monster_type = random.choices(range(5), weights=weights)[0]
-            self.enemies.append(Enemy(monster_type=monster_type))
+            enemy = Enemy()
+            # Scale enemy stats
+            enemy.health *= scaling
+            enemy.max_health *= scaling
+            enemy.damage *= scaling
+            self.enemies.append(enemy)
             
-    def spawn_enemy(self):
-        """Spawn a new enemy with type based on score"""
-        # Adjust spawn weights based on score
-        if self.score < 1000:
-            weights = [0.3, 0.3, 0.2, 0.1, 0.1]  # More basic enemies
-        elif self.score < 2000:
-            weights = [0.2, 0.2, 0.3, 0.15, 0.15]  # More spiders
-        elif self.score < 3000:
-            weights = [0.15, 0.15, 0.2, 0.25, 0.25]  # More demons and ghosts
-        else:
-            weights = [0.1, 0.1, 0.2, 0.3, 0.3]  # Mostly tough enemies
-            
-        monster_type = random.choices(range(5), weights=weights)[0]
-        self.enemies.append(Enemy(monster_type=monster_type))
+        self.state = GameStates.PLAYING
+
+    def enter_shop_phase(self):
+        """Enter shopping phase between rounds"""
+        self.state = GameStates.SHOPPING
+        self.shop_timer = SHOP_TIME_LIMIT
+        self.shop.refresh_items()  # Refresh shop items for new round
         
+        # Heal player partially between rounds
+        self.player.health = min(self.player.max_health, 
+                               self.player.health + self.player.max_health * 0.3)
+
     def update(self):
-        if not self.round_started:
+        if self.state == GameStates.MENU:
             # Update start menu
             self.start_menu.update()
             if self.start_menu.should_start_round:
-                self.round_started = True
-                self.spawn_initial_enemies()
-        elif not self.game_over:
-            # Pass enemies list to player for targeting
+                self.start_new_round()
+                
+        elif self.state == GameStates.PLAYING:
+            # Update game entities
             self.player.current_enemies = self.enemies
             self.player.update()
-            
-            # Update enemies and handle combat
             self.update_enemies()
             self.handle_combat()
+            
+            # Update round timer
+            self.round_timer -= 1
+            if self.round_timer <= 0:
+                self.current_round += 1
+                self.enter_shop_phase()
             
             # Update bonfire cooldowns and particles
             for pos in self.bonfire_cooldowns:
@@ -93,8 +104,99 @@ class GameState:
             
             # Remove dead enemies and spawn new ones
             self.enemies = [e for e in self.enemies if not e.is_dead]
-            if len(self.enemies) < STARTING_ENEMIES:
-                self.spawn_enemy()  # Use new spawn method
+            if len(self.enemies) < STARTING_ENEMIES + self.current_round - 1:
+                self.spawn_enemy()
+                
+        elif self.state == GameStates.SHOPPING:
+            # Update shop timer
+            self.shop_timer -= 1
+            
+            # Handle shop interactions
+            self.shop.update()
+            
+            # Handle purchase attempts
+            if pygame.mouse.get_pressed()[0]:  # Left click
+                if self.shop.selected_item:
+                    if self.shop.purchase_selected_item(self.player):
+                        self.items_bought_this_round += 1
+            
+            # Check if shopping phase should end
+            if self.shop_timer <= 0 or self.items_bought_this_round >= ITEMS_PER_ROUND:
+                self.start_new_round()
+                
+        elif self.state == GameStates.GAME_OVER:
+            # Handle game over state
+            pass
+
+    def draw(self, screen):
+        if self.state == GameStates.MENU:
+            # Draw start menu
+            self.start_menu.draw(screen)
+            
+        elif self.state == GameStates.PLAYING:
+            # Draw game world
+            screen.blit(self.terrain, (0, 0))
+            
+            # Draw bonfire effects
+            for pos in self.bonfire_cooldowns:
+                if self.bonfire_cooldowns[pos] > 0:
+                    progress = self.bonfire_cooldowns[pos] / BONFIRE_COOLDOWN
+                    radius = BONFIRE_HEAL_RADIUS * (1 - progress)
+                    pygame.draw.circle(screen, (*ORANGE, 30), pos, int(radius), 1)
+            
+            # Draw entities
+            self.player.draw(screen)
+            for enemy in self.enemies:
+                enemy.draw(screen)
+                
+            # Draw particle effects
+            self.terrain_gen.draw_particles(screen)
+            
+            # Draw HUD
+            self.draw_hud(screen)
+            
+        elif self.state == GameStates.SHOPPING:
+            # Draw shop interface
+            self.shop.draw(screen)
+            
+            # Draw shop timer
+            font = pygame.font.Font(None, 36)
+            timer_text = font.render(f'Shop Time: {self.shop_timer // FPS}s', True, WHITE)
+            items_text = font.render(f'Items Left: {ITEMS_PER_ROUND - self.items_bought_this_round}', True, WHITE)
+            screen.blit(timer_text, (10, 10))
+            screen.blit(items_text, (10, 50))
+            
+        elif self.state == GameStates.GAME_OVER:
+            self.draw_game_over(screen)
+
+    def draw_hud(self, screen):
+        font = pygame.font.Font(None, 36)
+        
+        # Draw score and round info
+        score_text = font.render(f'Score: {self.score}', True, WHITE)
+        round_text = font.render(f'Round: {self.current_round}', True, WHITE)
+        timer_text = font.render(f'Time: {self.round_timer // FPS}s', True, WHITE)
+        
+        screen.blit(score_text, (10, 10))
+        screen.blit(round_text, (10, 50))
+        screen.blit(timer_text, (10, 90))
+        
+        # Draw money
+        money_text = font.render(f'Money: ${self.player.money}', True, GOLD)
+        screen.blit(money_text, (SCREEN_WIDTH - 150, 10))
+        
+        # Draw health
+        health_text = font.render(f'Health: {int(self.player.health)}/{int(self.player.max_health)}', True, GREEN)
+        screen.blit(health_text, (SCREEN_WIDTH - 200, 50))
+
+    def spawn_enemy(self):
+        """Spawn a new enemy with scaled stats"""
+        enemy = Enemy()
+        scaling = 1 + (self.current_round - 1) * ENEMY_SCALING_PER_ROUND
+        enemy.health *= scaling
+        enemy.max_health *= scaling
+        enemy.damage *= scaling
+        self.enemies.append(enemy)
 
     def update_enemies(self):
         """Update all enemies"""
@@ -162,50 +264,6 @@ class GameState:
             pygame.draw.circle(effect_surface, (*GREEN, alpha), position, radius, 1)
             
         return effect_surface
-
-    def draw(self, screen):
-        if not self.round_started:
-            # Draw start menu
-            self.start_menu.draw(screen)
-        else:
-            # Draw terrain
-            screen.blit(self.terrain, (0, 0))
-            
-            # Draw bonfire cooldown indicators
-            for pos in self.bonfire_cooldowns:
-                if self.bonfire_cooldowns[pos] > 0:
-                    # Draw cooldown circle
-                    progress = self.bonfire_cooldowns[pos] / BONFIRE_COOLDOWN
-                    radius = BONFIRE_HEAL_RADIUS * (1 - progress)
-                    pygame.draw.circle(screen, (*ORANGE, 30), pos, int(radius), 1)
-            
-            # Draw game entities
-            self.player.draw(screen)
-            for enemy in self.enemies:
-                enemy.draw(screen)
-                
-            # Draw particle effects
-            self.terrain_gen.draw_particles(screen)
-            
-            # Draw HUD
-            self.draw_hud(screen)
-            
-            if self.game_over:
-                self.draw_game_over(screen)
-
-    def draw_hud(self, screen):
-        # Draw score
-        font = pygame.font.Font(None, 36)
-        score_text = font.render(f'Score: {self.score}', True, WHITE)
-        screen.blit(score_text, (10, 10))
-        
-        # Draw money
-        money_text = font.render(f'Money: ${self.player.money}', True, GOLD)
-        screen.blit(money_text, (10, 50))
-        
-        # Draw health
-        health_text = font.render(f'Health: {int(self.player.health)}/{int(self.player.max_health)}', True, GREEN)
-        screen.blit(health_text, (10, 90))
 
     def draw_game_over(self, screen):
         # Semi-transparent overlay

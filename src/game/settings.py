@@ -32,9 +32,9 @@ PLAYER_BASE_STATS = {
 }
 
 # Enemy settings
-STARTING_ENEMIES = 5
-ENEMY_SPAWN_RATE = 1.0
-ENEMY_KILL_REWARD = 15
+STARTING_ENEMIES = 4
+ENEMY_SPAWN_RATE = 1.2
+ENEMY_KILL_REWARD = 20
 ENEMY_BASE_STATS = {
     "health": 60,
     "damage": 5,
@@ -64,3 +64,23 @@ ITEM_RARITY = {
 # Shader settings
 SHADER_ENABLED = True
 POST_PROCESSING = True 
+
+# Round settings
+ROUND_DURATION = 60 * FPS  # 1 minute per round (reduced from 3 minutes)
+ROUND_BREAK_DURATION = 10 * FPS  # 10 seconds between rounds (reduced from 20)
+STARTING_ROUND = 1
+ENEMY_SCALING_PER_ROUND = 0.25  # Increased scaling to 25% per round for more intensity
+
+# Shop settings
+SHOP_REFRESH_COST = 20
+SHOP_ITEMS_DISPLAYED = 4
+SHOP_TIME_LIMIT = 15 * FPS  # 15 seconds to shop (reduced from 30)
+ITEMS_PER_ROUND = 2  # Reduced from 3 to make choices more meaningful
+
+# Game States
+class GameStates:
+    MENU = "menu"
+    PLAYING = "playing"
+    SHOPPING = "shopping"
+    ROUND_TRANSITION = "round_transition"
+    GAME_OVER = "game_over" 
