@@ -21,28 +21,23 @@ class Player:
         
         # Equipment system
         self.equipment_sprites = EquipmentSprites(PLAYER_SIZE)
-        self.equipped_weapon = None
-        self.weapon_sprite = None
+        self.weapons = []  # List of equipped weapons (max 4)
+        self.weapon_sprites = []  # List of weapon sprites
+        self.current_weapon_index = 0
         self.armor_overlays = []  # List of armor visual effects
         
         # Animation system
         if self.sprite:
             self.animator = AnimationHandler(self.sprite)
-            # Initialize gun animation
-            gun_sprite = pygame.Surface((24, 12), pygame.SRCALPHA)  # Basic gun shape
-            pygame.draw.rect(gun_sprite, (100, 100, 100), (0, 3, 20, 6))  # Gun body
-            pygame.draw.rect(gun_sprite, (80, 80, 80), (16, 2, 8, 8))  # Gun barrel
-            self.gun_animator = GunAnimationHandler(gun_sprite)
         else:
             self.animator = None
-            self.gun_animator = None
         
-        # Gun state
-        self.gun_offset_x = 20
-        self.gun_offset_y = 0
-        self.gun_angle = 0
-        self.is_shooting = False
-        self.shoot_cooldown = 0
+        # Weapon state
+        self.weapon_offset_x = 20
+        self.weapon_offset_y = 0
+        self.weapon_angle = 0
+        self.is_attacking = False
+        self.weapon_cooldowns = []  # Cooldown for each weapon
         
         # Bullet system
         self.bullet_system = BulletParticleSystem()
@@ -57,40 +52,47 @@ class Player:
         # Base stats (can be modified by items)
         self.stats = PLAYER_BASE_STATS.copy()
         
-        # Stat multipliers from items
-        self.stat_multipliers = {stat: 1.0 for stat in self.stats.keys()}
+        # Stat multipliers from items (now they stack)
+        self.stat_multipliers = {stat: [] for stat in self.stats.keys()}
         
-        # Temporary buffs system
-        self.temporary_buffs = {}  # {stat_name: [(multiplier, remaining_time), ...]}
-        
-        # Attack cooldown
-        self.attack_cooldown = 0
-        self.attack_timer = 0
-        
-        # Attack animation
+        # Combat state
         self.is_attacking = False
         self.attack_animation_timer = 0
         self.attack_animation_duration = 5
+        self.current_enemies = []  # List of current enemies in range
+        self.score = 0  # Track player's score
 
     def equip_item(self, item):
         """Handle equipping an item and updating visuals"""
         if item.item_type == ItemType.ACTIVE:
-            self.equipped_weapon = item
-            self.weapon_sprite = self.equipment_sprites.generate_weapon_sprite(item.name)
+            if len(self.weapons) < 4:  # Maximum 4 weapons
+                self.weapons.append(item)
+                self.weapon_sprites.append(self.equipment_sprites.generate_weapon_sprite(item.name))
+                self.weapon_cooldowns.append(0)
+                # Apply weapon stats
+                item.apply_effect(self)
+            else:
+                print("Cannot equip more than 4 weapons!")
+                return False
         elif item.item_type == ItemType.PASSIVE:
             # Generate armor overlay if the item has a visual effect
             overlay = self.equipment_sprites.generate_armor_overlay(item.name)
             if overlay:
                 self.armor_overlays.append(overlay)
-        
-        # Apply item stats
-        item.apply_effect(self)
+            # Apply passive item stats (they now stack)
+            item.apply_effect(self)
+        return True
 
     def unequip_item(self, item):
         """Handle unequipping an item and removing visuals"""
-        if item.item_type == ItemType.ACTIVE and self.equipped_weapon == item:
-            self.equipped_weapon = None
-            self.weapon_sprite = None
+        if item.item_type == ItemType.ACTIVE:
+            if item in self.weapons:
+                index = self.weapons.index(item)
+                self.weapons.pop(index)
+                self.weapon_sprites.pop(index)
+                self.weapon_cooldowns.pop(index)
+                if self.current_weapon_index >= len(self.weapons):
+                    self.current_weapon_index = max(0, len(self.weapons) - 1)
         elif item.item_type == ItemType.PASSIVE:
             # Remove armor overlay if it exists
             self.armor_overlays = [overlay for overlay in self.armor_overlays 
@@ -143,14 +145,11 @@ class Player:
         self.input()
         self.move()
         
-        # Update attack cooldown
-        if self.attack_timer > 0:
-            self.attack_timer -= 1
-            
-        # Update shoot cooldown
-        if self.shoot_cooldown > 0:
-            self.shoot_cooldown -= 1
-            
+        # Update weapon cooldowns
+        for i in range(len(self.weapon_cooldowns)):
+            if self.weapon_cooldowns[i] > 0:
+                self.weapon_cooldowns[i] -= 1
+        
         # Update animations
         if self.animator:
             # Update character animation
@@ -161,20 +160,16 @@ class Player:
             else:
                 self.animator.set_animation('idle')
             self.animator.update()
-            
-            # Update gun animation
-            if self.gun_animator:
-                self.gun_animator.update()
-                
-        # Calculate gun angle based on movement or target
+        
+        # Calculate weapon angle based on movement or target
         if self.direction.magnitude() > 0:
-            self.gun_angle = math.degrees(math.atan2(self.direction.y, self.direction.x))
+            self.weapon_angle = math.degrees(math.atan2(self.direction.y, self.direction.x))
         
         # Update bullet system
         self.bullet_system.update()
         
-        # Update temporary buffs
-        self._update_temporary_buffs()
+        # Auto-attack with all weapons that are off cooldown
+        self.attack()
 
     def draw(self, screen):
         # Draw character sprite with animations or fallback to rectangle
@@ -190,22 +185,27 @@ class Player:
                 overlay_flipped = pygame.transform.flip(overlay, self.facing_left, False)
                 screen.blit(overlay_flipped, self.rect)
             
-            # Draw equipped weapon
-            if self.weapon_sprite:
-                # Calculate weapon position and rotation
-                weapon_x = self.rect.centerx + (self.gun_offset_x if not self.facing_left else -self.gun_offset_x)
-                weapon_y = self.rect.centery + self.gun_offset_y
-                
-                # Rotate weapon
-                rotated_weapon = pygame.transform.rotate(self.weapon_sprite, -self.gun_angle)
-                weapon_rect = rotated_weapon.get_rect(center=(weapon_x, weapon_y))
-                
-                # Draw weapon
-                screen.blit(rotated_weapon, weapon_rect)
-                
-                # Draw attack effects if attacking
-                if self.is_attacking and self.equipped_weapon:
-                    self._draw_attack_effects(screen, weapon_x, weapon_y)
+            # Draw all equipped weapons
+            for i, weapon_sprite in enumerate(self.weapon_sprites):
+                if weapon_sprite:
+                    # Calculate offset based on weapon index
+                    angle_offset = i * (360 / max(1, len(self.weapon_sprites)))
+                    weapon_angle = self.weapon_angle + angle_offset
+                    
+                    # Calculate weapon position
+                    weapon_x = self.rect.centerx + math.cos(math.radians(weapon_angle)) * self.weapon_offset_x
+                    weapon_y = self.rect.centery + math.sin(math.radians(weapon_angle)) * self.weapon_offset_y
+                    
+                    # Rotate weapon
+                    rotated_weapon = pygame.transform.rotate(weapon_sprite, -weapon_angle)
+                    weapon_rect = rotated_weapon.get_rect(center=(weapon_x, weapon_y))
+                    
+                    # Draw weapon
+                    screen.blit(rotated_weapon, weapon_rect)
+                    
+                    # Draw attack effects if attacking and cooldown is active
+                    if self.is_attacking and self.weapon_cooldowns[i] > 0:
+                        self._draw_attack_effects(screen, weapon_x, weapon_y, self.weapons[i])
         else:
             pygame.draw.rect(screen, self.color, self.rect)
         
@@ -214,22 +214,50 @@ class Player:
         
         self.draw_health_bar(screen)
 
-    def _draw_attack_effects(self, screen, weapon_x, weapon_y):
+    def _draw_attack_effects(self, screen, weapon_x, weapon_y, weapon):
         """Draw weapon-specific attack effects"""
-        if self.equipped_weapon.name == "Magic Wand":
+        if weapon is None:  # Basic attack effect
+            # Enhanced slash effect
+            angle = self.weapon_angle
+            # Main slash arc
+            for i in range(3):
+                start_angle = angle - 30 + (i * 30)
+                end_angle = start_angle + 30
+                radius = 20 + (i * 5)
+                rect = pygame.Rect(weapon_x - radius, weapon_y - radius, radius * 2, radius * 2)
+                pygame.draw.arc(screen, WHITE, rect, math.radians(start_angle), math.radians(end_angle), 2)
+            
+            # Additional particle effects
+            for _ in range(3):
+                particle_angle = angle + random.uniform(-20, 20)
+                distance = random.uniform(15, 25)
+                effect_x = weapon_x + math.cos(math.radians(particle_angle)) * distance
+                effect_y = weapon_y + math.sin(math.radians(particle_angle)) * distance
+                
+                # Draw small triangles as particles
+                points = []
+                for i in range(3):
+                    point_angle = particle_angle + (i * 120)
+                    point_x = effect_x + math.cos(math.radians(point_angle)) * 3
+                    point_y = effect_y + math.sin(math.radians(point_angle)) * 3
+                    points.append((point_x, point_y))
+                
+                pygame.draw.polygon(screen, (200, 200, 200), points)
+                
+        elif weapon.name == "Magic Wand":
             # Magic sparkle effect
             for _ in range(3):
-                angle = self.gun_angle + random.uniform(-30, 30)
+                angle = self.weapon_angle + random.uniform(-30, 30)
                 distance = random.uniform(15, 25)
                 effect_x = weapon_x + math.cos(math.radians(angle)) * distance
                 effect_y = weapon_y + math.sin(math.radians(angle)) * distance
                 
                 pygame.draw.circle(screen, (100, 200, 255, 150), (int(effect_x), int(effect_y)), 2)
         
-        elif self.equipped_weapon.name == "Fire Wand":
+        elif weapon.name == "Fire Wand":
             # Fire trail effect
             for _ in range(5):
-                angle = self.gun_angle + random.uniform(-20, 20)
+                angle = self.weapon_angle + random.uniform(-20, 20)
                 distance = random.uniform(10, 30)
                 effect_x = weapon_x + math.cos(math.radians(angle)) * distance
                 effect_y = weapon_y + math.sin(math.radians(angle)) * distance
@@ -239,10 +267,10 @@ class Player:
                 pygame.draw.circle(screen, (255, 100, 0, alpha), 
                                  (int(effect_x), int(effect_y)), int(size))
         
-        elif self.equipped_weapon.name == "Lightning Ring":
+        elif weapon.name == "Lightning Ring":
             # Lightning effect
             for _ in range(2):
-                start_angle = self.gun_angle + random.uniform(-30, 30)
+                start_angle = self.weapon_angle + random.uniform(-30, 30)
                 points = [(weapon_x, weapon_y)]
                 
                 for _ in range(3):
@@ -266,23 +294,28 @@ class Player:
         pygame.draw.rect(screen, GREEN, (*bar_pos, health_width, bar_height))
         
     def get_stat(self, stat_name):
-        """Get a stat's current value including item modifiers and temporary buffs"""
+        """Get a stat's current value including stacked multipliers"""
         base_value = self.stats.get(stat_name, 0)
-        permanent_multiplier = self.stat_multipliers.get(stat_name, 1.0)
         
-        # Apply temporary buffs
-        temp_multiplier = 1.0
-        if stat_name in self.temporary_buffs:
-            for mult, _ in self.temporary_buffs[stat_name]:
-                temp_multiplier *= mult
+        # Apply all multipliers
+        total_multiplier = 1.0
+        if stat_name in self.stat_multipliers:
+            for mult in self.stat_multipliers[stat_name]:
+                total_multiplier *= mult
                 
-        return base_value * permanent_multiplier * temp_multiplier
+        return base_value * total_multiplier
         
     def modify_stat(self, stat_name, multiplier):
-        """Modify a stat's multiplier (used by items)"""
+        """Modify a stat's multiplier (used by items) - now they stack"""
         if stat_name in self.stat_multipliers:
-            self.stat_multipliers[stat_name] *= multiplier
+            self.stat_multipliers[stat_name].append(multiplier)
             
+    def remove_stat_multiplier(self, stat_name, multiplier):
+        """Remove a specific stat multiplier"""
+        if stat_name in self.stat_multipliers:
+            if multiplier in self.stat_multipliers[stat_name]:
+                self.stat_multipliers[stat_name].remove(multiplier)
+                
     def take_damage(self, amount):
         """Take damage with defense calculation"""
         defense_multiplier = 1 - (self.get_stat("defense") / 100)
@@ -305,58 +338,76 @@ class Player:
         self.money += amount
         
     def attack(self):
-        """Shoot at the nearest enemy"""
-        if self.attack_timer <= 0 and self.shoot_cooldown <= 0:
-            self.attack_timer = 60 / self.get_stat("attack_speed")  # 60 frames per second
-            self.shoot_cooldown = 10  # Additional cooldown for gun animation
-            self.is_attacking = True
-            self.attack_animation_timer = self.attack_animation_duration
-            
-            # Trigger gun shoot animation
-            if self.gun_animator:
-                self.gun_animator.set_animation('shoot')
-            
-            # Calculate gun position
-            gun_x = self.rect.centerx + (self.gun_offset_x if not self.facing_left else -self.gun_offset_x)
-            gun_y = self.rect.centery + self.gun_offset_y
-            
-            # Find closest enemy position
-            closest_enemy = None
-            min_distance = float('inf')
-            
-            for enemy in self.current_enemies:
-                if self.can_attack_enemy(enemy):
-                    dx = enemy.rect.centerx - self.rect.centerx
-                    dy = enemy.rect.centery - self.rect.centery
-                    distance = math.sqrt(dx * dx + dy * dy)
-                    
-                    if distance < min_distance:
-                        min_distance = distance
-                        closest_enemy = enemy
-            
-            if closest_enemy:
-                # Update gun angle to face target
-                dx = closest_enemy.rect.centerx - gun_x
-                dy = closest_enemy.rect.centery - gun_y
-                self.gun_angle = math.degrees(math.atan2(dy, dx))
+        """Attack with all weapons and basic attack if no weapons equipped"""
+        damage_dealt = 0
+        
+        # Basic attack if no weapons equipped
+        if not self.weapons:
+            if not hasattr(self, 'basic_attack_cooldown'):
+                self.basic_attack_cooldown = 0
                 
-                # Create bullet effect
-                target_x = closest_enemy.rect.centerx
-                target_y = closest_enemy.rect.centery
-                self.bullet_system.shoot((gun_x, gun_y), (target_x, target_y))
-                return self.calculate_damage()
+            if self.basic_attack_cooldown <= 0:
+                self.basic_attack_cooldown = 0.5 * FPS  # Basic attack every 0.5 seconds
+                self.is_attacking = True
+                # Calculate basic attack damage
+                damage = self.calculate_damage() * 1.0  # Base damage multiplier
+                damage_dealt += self._attack_nearest_enemy(damage, None)
+            else:
+                self.basic_attack_cooldown -= 1
+        
+        # Weapon attacks
+        for i, weapon in enumerate(self.weapons):
+            if self.weapon_cooldowns[i] <= 0:
+                self.weapon_cooldowns[i] = weapon.weapon_stats.get("cooldown", 1.0) * FPS
+                self.is_attacking = True
+                # Calculate damage
+                damage = self.calculate_damage() * weapon.stats.get("damage", 1.0)
+                # Find closest enemy and apply damage
+                damage_dealt += self._attack_nearest_enemy(damage, weapon)
+            else:
+                self.weapon_cooldowns[i] -= 1
                 
+        return damage_dealt
+
+    def _attack_nearest_enemy(self, damage, weapon):
+        """Find and attack the nearest enemy with the given weapon"""
+        closest_enemy = None
+        min_distance = float('inf')
+        
+        for enemy in self.current_enemies:
+            if self.can_attack_enemy(enemy):
+                dx = enemy.rect.centerx - self.rect.centerx
+                dy = enemy.rect.centery - self.rect.centery
+                distance = math.sqrt(dx * dx + dy * dy)
+                
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_enemy = enemy
+        
+        if closest_enemy:
+            # Create hit particles at enemy position
+            if weapon is None:  # Basic attack
+                # Create slash particles
+                for _ in range(5):
+                    angle = self.weapon_angle + random.uniform(-30, 30)
+                    speed = random.uniform(2, 5)
+                    dx = math.cos(math.radians(angle)) * speed
+                    dy = math.sin(math.radians(angle)) * speed
+                    self.bullet_system.add_particle(
+                        closest_enemy.rect.centerx, 
+                        closest_enemy.rect.centery,
+                        dx, dy,
+                        WHITE,
+                        random.randint(5, 10),  # Lifetime
+                        random.uniform(2, 4)     # Size
+                    )
+            
+            if closest_enemy.take_damage(damage):
+                self.score += 1
+                self.add_money(ENEMY_KILL_REWARD)
+            return damage
         return 0
-        
-    def calculate_damage(self):
-        """Calculate damage with critical hits"""
-        base_damage = self.get_stat("damage")
-        
-        # Check for critical hit
-        if random.random() < self.get_stat("crit_chance"):
-            return base_damage * self.get_stat("crit_damage")
-        return base_damage
-        
+
     def can_attack_enemy(self, enemy):
         """Check if an enemy is within attack range"""
         if enemy.is_dead:
@@ -385,15 +436,16 @@ class Player:
             if not self.temporary_buffs[stat_name]:
                 del self.temporary_buffs[stat_name]
                 
-    def get_stat(self, stat_name):
-        """Get a stat's current value including item modifiers and temporary buffs"""
-        base_value = self.stats.get(stat_name, 0)
-        permanent_multiplier = self.stat_multipliers.get(stat_name, 1.0)
+    def calculate_damage(self):
+        """Calculate damage with critical hits"""
+        base_damage = self.get_stat("damage")
         
-        # Apply temporary buffs
-        temp_multiplier = 1.0
-        if stat_name in self.temporary_buffs:
-            for mult, _ in self.temporary_buffs[stat_name]:
-                temp_multiplier *= mult
-                
-        return base_value * permanent_multiplier * temp_multiplier 
+        # Check for critical hit
+        if random.random() < self.get_stat("crit_chance"):
+            return base_damage * self.get_stat("crit_damage")
+        return base_damage
+
+    def set_current_enemies(self, enemies):
+        """Update the list of current enemies"""
+        self.current_enemies = enemies
+ 

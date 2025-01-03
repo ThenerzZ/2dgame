@@ -89,7 +89,7 @@ class GameState:
                 
         elif self.state == GameStates.PLAYING:
             # Update game entities
-            self.player.current_enemies = self.enemies
+            self.player.set_current_enemies(self.enemies)  # Set current enemies for player
             self.player.update()
             self.update_enemies()
             self.handle_combat()
@@ -288,27 +288,8 @@ class GameState:
                     self.state = GameStates.GAME_OVER
                     return
 
-        # Find closest enemy in range for auto-attack
-        closest_enemy = None
-        min_distance = float('inf')
-        
-        for enemy in self.enemies:
-            if self.player.can_attack_enemy(enemy):
-                dx = enemy.rect.centerx - self.player.rect.centerx
-                dy = enemy.rect.centery - self.player.rect.centery
-                distance = math.sqrt(dx * dx + dy * dy)
-                
-                if distance < min_distance:
-                    min_distance = distance
-                    closest_enemy = enemy
-        
-        # Auto-attack the closest enemy
-        if closest_enemy:
-            damage = self.player.attack()
-            if damage > 0:  # If attack is ready
-                if closest_enemy.take_damage(damage):
-                    self.score += 1
-                    self.player.add_money(ENEMY_KILL_REWARD)
+        # Player auto-attacks (damage is handled inside player class now)
+        self.player.attack()
 
     def check_bonfire_healing(self):
         """Check if player is near a bonfire and apply healing"""
