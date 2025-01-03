@@ -40,10 +40,30 @@ class GameState:
     def spawn_initial_enemies(self):
         """Spawn initial enemies when round starts"""
         self.enemies.clear()
-        for _ in range(STARTING_ENEMIES):
-            enemy_sprite = self.char_gen.generate_character()  # Each enemy gets unique appearance
-            self.enemies.append(Enemy(character_sprite=enemy_sprite))
-
+        
+        # Start with basic enemies
+        num_enemies = STARTING_ENEMIES
+        for _ in range(num_enemies):
+            # Higher chance for basic enemies at start
+            weights = [0.4, 0.3, 0.2, 0.05, 0.05]  # Skeleton, Slime, Spider, Demon, Ghost
+            monster_type = random.choices(range(5), weights=weights)[0]
+            self.enemies.append(Enemy(monster_type=monster_type))
+            
+    def spawn_enemy(self):
+        """Spawn a new enemy with type based on score"""
+        # Adjust spawn weights based on score
+        if self.score < 1000:
+            weights = [0.3, 0.3, 0.2, 0.1, 0.1]  # More basic enemies
+        elif self.score < 2000:
+            weights = [0.2, 0.2, 0.3, 0.15, 0.15]  # More spiders
+        elif self.score < 3000:
+            weights = [0.15, 0.15, 0.2, 0.25, 0.25]  # More demons and ghosts
+        else:
+            weights = [0.1, 0.1, 0.2, 0.3, 0.3]  # Mostly tough enemies
+            
+        monster_type = random.choices(range(5), weights=weights)[0]
+        self.enemies.append(Enemy(monster_type=monster_type))
+        
     def update(self):
         if not self.round_started:
             # Update start menu
@@ -72,8 +92,7 @@ class GameState:
             # Remove dead enemies and spawn new ones
             self.enemies = [e for e in self.enemies if not e.is_dead]
             if len(self.enemies) < STARTING_ENEMIES:
-                enemy_sprite = self.char_gen.generate_character()
-                self.enemies.append(Enemy(character_sprite=enemy_sprite))
+                self.spawn_enemy()  # Use new spawn method
 
     def update_enemies(self):
         """Update all enemies"""
