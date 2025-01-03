@@ -2,6 +2,7 @@ import pygame
 import random
 import noise
 import math
+from graphics.particles import BonfireParticleSystem
 
 class TerrainGenerator:
     def __init__(self, tile_size=32):
@@ -18,6 +19,7 @@ class TerrainGenerator:
             'ember': [(255, 50, 0), (255, 80, 0), (200, 40, 0)]     # Ember colors
         }
         self.bonfire_positions = []  # Store bonfire positions for game logic
+        self.bonfire_particles = {}  # Store particle systems for each bonfire
         
     def generate_tile(self, type='grass'):
         """Generate a single tile with pixel-perfect details"""
@@ -304,32 +306,24 @@ class TerrainGenerator:
                            (log_x - 2, log_y),
                            (log_x + 2, log_y), 2)
         
-        # Draw flames
-        flame_colors = self.colors['fire']
-        for i in range(4):
-            flame_height = random.randint(4, 6)
-            flame_x = center_x + random.randint(-2, 2)
-            flame_color = random.choice(flame_colors)
-            
-            # Draw flame as a triangle
-            points = [
-                (flame_x, center_y),
-                (flame_x - 2, center_y),
-                (flame_x - 1, center_y - flame_height)
-            ]
-            pygame.draw.polygon(surface, flame_color, points)
+        # Create particle system for this bonfire
+        pos = (center_x, center_y)
+        self.bonfire_particles[pos] = BonfireParticleSystem(center_x, center_y - 2)
         
-        # Add embers
-        for _ in range(3):
-            ember_x = center_x + random.randint(-4, 4)
-            ember_y = center_y + random.randint(-6, -2)
-            ember_color = random.choice(self.colors['ember'])
-            pygame.draw.circle(surface, ember_color, (int(ember_x), int(ember_y)), 1)
-        
-        # Add glow effect
+        # Add base glow effect
         glow_surface = pygame.Surface((self.tile_size, self.tile_size), pygame.SRCALPHA)
         pygame.draw.circle(glow_surface, (255, 100, 0, 30),
-                         (self.tile_size//2, self.tile_size//2), 8)
+                         (self.tile_size//2, self.tile_size//2), 12)
         surface.blit(glow_surface, (x, y))
         
-        return (center_x, center_y)  # Return position for game logic 
+        return pos  # Return position for game logic
+
+    def update_particles(self):
+        """Update all bonfire particle systems"""
+        for particle_system in self.bonfire_particles.values():
+            particle_system.update()
+
+    def draw_particles(self, surface):
+        """Draw all bonfire particle effects"""
+        for particle_system in self.bonfire_particles.values():
+            particle_system.draw(surface) 

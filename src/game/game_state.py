@@ -58,10 +58,13 @@ class GameState:
             self.update_enemies()
             self.handle_combat()
             
-            # Update bonfire cooldowns
+            # Update bonfire cooldowns and particles
             for pos in self.bonfire_cooldowns:
                 if self.bonfire_cooldowns[pos] > 0:
                     self.bonfire_cooldowns[pos] -= 1
+            
+            # Update particle effects
+            self.terrain_gen.update_particles()
             
             # Check for bonfire healing
             self.check_bonfire_healing()
@@ -159,6 +162,9 @@ class GameState:
             self.player.draw(screen)
             for enemy in self.enemies:
                 enemy.draw(screen)
+                
+            # Draw particle effects
+            self.terrain_gen.draw_particles(screen)
             
             # Draw HUD
             self.draw_hud(screen)
