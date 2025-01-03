@@ -9,23 +9,26 @@ class TerrainGenerator:
     def __init__(self, tile_size=32):
         self.tile_size = tile_size
         self.colors = {
-            'grass': [(20, 30, 15), (25, 35, 20), (30, 40, 25)],  # Dark grass variations
-            'stone': [(40, 40, 45), (45, 45, 50), (50, 50, 55)],  # Dark stone variations
-            'path': [(35, 30, 25), (40, 35, 30), (45, 40, 35)],   # Dark dirt path
-            'detail': [(15, 15, 15), (20, 20, 20)],               # Dark details
-            'ruins': [(55, 50, 45), (50, 45, 40), (45, 40, 35)],  # Ancient ruins
-            'tree': [(25, 35, 20), (20, 30, 15), (30, 40, 25)],   # Tree colors
-            'crystal': [(60, 100, 120), (70, 110, 130), (80, 120, 140)],  # Magic crystals
-            'fire': [(255, 100, 0), (255, 160, 0), (255, 130, 0)],  # Fire colors
-            'ember': [(255, 50, 0), (255, 80, 0), (200, 40, 0)]     # Ember colors
+            'grass': [(20, 30, 15), (25, 35, 20), (30, 40, 25)],  # Dark, moody grass
+            'stone': [(45, 45, 50), (40, 40, 45), (35, 35, 40)],  # Dark stone
+            'path': [(35, 30, 25), (40, 35, 30), (45, 40, 35)],   # Dark earthen path
+            'detail': [(15, 15, 15), (20, 20, 20)],               # Very dark details
+            'ruins': [(55, 50, 45), (50, 45, 40), (45, 40, 35)],  # Ancient weathered ruins
+            'tree': [(20, 30, 15), (15, 25, 10), (25, 35, 20)],   # Dark forest trees
+            'crystal': [(60, 20, 90), (70, 30, 100), (50, 10, 80)],  # Dark purple crystals
+            'fire': [(200, 60, 0), (180, 50, 0), (160, 40, 0)],   # Deep orange fire
+            'ember': [(255, 30, 0), (200, 20, 0), (150, 10, 0)],  # Dark red embers
+            'flower': [(80, 20, 30), (70, 15, 25), (90, 25, 35)], # Dark red flowers
+            'mushroom': [(50, 10, 10), (40, 8, 8), (60, 12, 12)], # Blood-red mushrooms
+            'water': [(10, 20, 30), (15, 25, 35), (20, 30, 40)]   # Dark murky water
         }
-        self.bonfire_positions = []  # Store bonfire positions for game logic
-        self.bonfire_particles = {}  # Store particle systems for each bonfire
+        self.bonfire_positions = []
+        self.bonfire_particles = {}
         
         # Animation settings
         self.animation_timer = 0
         self.grass_offset = 0
-        self.ANIMATION_SPEED = 0.1  # Lower = slower
+        self.ANIMATION_SPEED = 0.1
         
     def generate_tile(self, type='grass'):
         """Generate a single tile with pixel-perfect details"""
@@ -55,68 +58,178 @@ class TerrainGenerator:
         return surface
         
     def _add_grass_details(self, surface):
-        """Add grass-like details with subtle animation support"""
-        # Add static grass details
-        for _ in range(random.randint(3, 5)):
+        """Add dark fantasy grass details"""
+        # Add base grass texture with darker shades
+        for _ in range(random.randint(6, 9)):  # More grass for denser look
             x = random.randint(0, self.tile_size-2)
             height = random.randint(2, 4)
-            color = random.choice(self.colors['detail'])
+            color = random.choice(self.colors['grass'])
             
-            # Draw grass blade
+            # Draw grass blade with darker variations
             for y in range(height):
                 pos_y = self.tile_size - y - 1
-                surface.set_at((x, pos_y), color)
-                if random.random() < 0.5:  # 50% chance for wider grass
-                    surface.set_at((x+1, pos_y), color)
+                # Darken color as grass gets taller
+                darkness = max(0, color[0] - y)
+                dark_color = (darkness, darkness + 10, darkness)
+                surface.set_at((x, pos_y), dark_color)
+                if random.random() < 0.7:  # 70% chance for wider grass
+                    surface.set_at((x+1, pos_y), dark_color)
         
-        # Add a few taller grass blades that can be animated
-        for _ in range(2):
+        # Add sinister flowers occasionally
+        if random.random() < 0.1:  # 10% chance for dark flowers
+            flower_x = random.randint(2, self.tile_size-4)
+            flower_y = random.randint(2, self.tile_size-4)
+            flower_color = random.choice(self.colors['flower'])
+            
+            # Draw small, dark flower
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    if abs(dx) + abs(dy) <= 1:  # Cross shape
+                        surface.set_at((flower_x + dx, flower_y + dy), flower_color)
+                        
+        # Add mysterious mushrooms occasionally
+        if random.random() < 0.15:  # 15% chance for dark mushrooms
+            mush_x = random.randint(2, self.tile_size-4)
+            mush_y = random.randint(self.tile_size-6, self.tile_size-2)
+            mush_color = random.choice(self.colors['mushroom'])
+            
+            # Draw eerie mushroom
+            surface.set_at((mush_x, mush_y), mush_color)  # Cap
+            surface.set_at((mush_x, mush_y+1), (20, 20, 20))  # Dark stem
+            # Add slight glow effect
+            for dx, dy in [(-1,0), (1,0), (0,-1)]:
+                try:
+                    surface.set_at((mush_x + dx, mush_y + dy), 
+                                 tuple(max(0, c - 10) for c in mush_color))
+                except IndexError:
+                    continue
+            
+        # Add animated grass blades
+        for _ in range(3):
             x = random.randint(2, self.tile_size-3)
             height = random.randint(4, 6)
             color = random.choice(self.colors['grass'])
-            
-            # Store position for animation
-            surface.set_at((x, self.tile_size - height), (*color, 128))  # Semi-transparent marker
-                    
+            surface.set_at((x, self.tile_size - height), (*color, 128))
+
     def _add_stone_details(self, surface):
-        """Add stone-like details"""
-        for _ in range(random.randint(3, 5)):
-            x = random.randint(2, self.tile_size-3)
-            y = random.randint(2, self.tile_size-3)
-            size = random.randint(2, 3)
-            color = random.choice(self.colors['detail'])
+        """Add enhanced stone details"""
+        # Add base texture
+        for _ in range(random.randint(6, 8)):
+            x = random.randint(2, self.tile_size-4)
+            y = random.randint(2, self.tile_size-4)
+            size = random.randint(2, 4)
+            color = random.choice(self.colors['stone'])
             
-            # Draw crack-like pattern
-            for i in range(size):
-                surface.set_at((x+i, y), color)
-                surface.set_at((x+i, y+1), color)
-                
+            # Draw varied stone patterns
+            pattern_type = random.choice(['crack', 'circle', 'dots'])
+            
+            if pattern_type == 'crack':
+                # Draw crack-like pattern
+                for i in range(size):
+                    dx = random.randint(-1, 1)
+                    surface.set_at((x+i+dx, y), color)
+                    surface.set_at((x+i+dx, y+1), color)
+            elif pattern_type == 'circle':
+                # Draw small circular pattern
+                pygame.draw.circle(surface, color, (x, y), size//2)
+            else:  # dots
+                # Draw scattered dots
+                for _ in range(3):
+                    dx = random.randint(-size//2, size//2)
+                    dy = random.randint(-size//2, size//2)
+                    surface.set_at((x+dx, y+dy), color)
+
     def _add_path_details(self, surface):
-        """Add path-like details"""
-        # Add some scattered dirt/gravel details
-        for _ in range(random.randint(4, 6)):
-            x = random.randint(2, self.tile_size-3)
-            y = random.randint(2, self.tile_size-3)
-            size = random.randint(1, 2)
-            color = random.choice(self.colors['detail'])
-            
-            # Draw small gravel/dirt patches
-            for dx in range(size):
-                for dy in range(size):
-                    if random.random() < 0.7:  # 70% chance to draw each pixel
-                        surface.set_at((x + dx, y + dy), color)
-                        
-        # Add some path edge variation
-        for _ in range(2):
-            x = random.randint(0, self.tile_size-1)
-            height = random.randint(2, 3)
+        """Add enhanced path details"""
+        # Add base texture
+        for _ in range(random.randint(6, 8)):
+            x = random.randint(2, self.tile_size-4)
+            y = random.randint(2, self.tile_size-4)
+            size = random.randint(2, 3)
             color = random.choice(self.colors['path'])
             
-            # Draw edge detail
-            for y in range(height):
-                if random.random() < 0.8:  # 80% chance to draw each pixel
-                    surface.set_at((x, y), color)
+            # Draw varied dirt/gravel patterns
+            pattern_type = random.choice(['gravel', 'crack', 'dots'])
+            
+            if pattern_type == 'gravel':
+                # Draw small gravel cluster
+                for dx in range(-1, 2):
+                    for dy in range(-1, 2):
+                        if random.random() < 0.7:
+                            try:
+                                surface.set_at((x+dx, y+dy), color)
+                            except IndexError:
+                                continue
+            elif pattern_type == 'crack':
+                # Draw small crack
+                for i in range(size):
+                    dx = random.randint(-1, 1)
+                    surface.set_at((x+i+dx, y), color)
+            else:  # dots
+                # Scattered dots
+                for _ in range(3):
+                    dx = random.randint(-2, 2)
+                    dy = random.randint(-2, 2)
+                    try:
+                        surface.set_at((x+dx, y+dy), color)
+                    except IndexError:
+                        continue
+                        
+        # Add occasional small rocks
+        if random.random() < 0.3:  # 30% chance for rocks
+            rock_x = random.randint(2, self.tile_size-4)
+            rock_y = random.randint(2, self.tile_size-4)
+            rock_color = random.choice(self.colors['stone'])
+            
+            # Draw small rock
+            pygame.draw.circle(surface, rock_color, (rock_x, rock_y), 2)
+
+    def _add_tree(self, surface, x, y):
+        """Add enhanced tree"""
+        trunk_color = (101, 67, 33)  # Rich brown
+        leaves_color = random.choice(self.colors['tree'])
         
+        # Draw enhanced trunk
+        trunk_width = random.randint(3, 4)
+        trunk_height = random.randint(8, 12)
+        
+        # Add trunk texture
+        for tx in range(trunk_width):
+            for ty in range(trunk_height):
+                if random.random() < 0.8:  # 80% chance for each pixel
+                    pixel_x = x + self.tile_size//2 - trunk_width//2 + tx
+                    pixel_y = y + self.tile_size//2 + ty
+                    color_var = random.randint(-10, 10)
+                    trunk_pixel = tuple(max(0, min(255, c + color_var)) for c in trunk_color)
+                    surface.set_at((pixel_x, pixel_y), trunk_pixel)
+        
+        # Draw enhanced leaves
+        leaf_positions = [
+            (0, -2),  # Top
+            (-1, -1), (1, -1),  # Middle
+            (-2, 0), (0, 0), (2, 0),  # Bottom
+        ]
+        
+        center_x = x + self.tile_size//2
+        center_y = y + self.tile_size//2 - trunk_height//2
+        
+        for offset_x, offset_y in leaf_positions:
+            leaf_x = center_x + offset_x * 4
+            leaf_y = center_y + offset_y * 4
+            leaf_size = random.randint(3, 5)
+            
+            # Draw textured leaf cluster
+            for dx in range(-leaf_size, leaf_size+1):
+                for dy in range(-leaf_size, leaf_size+1):
+                    if dx*dx + dy*dy <= leaf_size*leaf_size:
+                        if random.random() < 0.8:  # 80% chance for each pixel
+                            try:
+                                color_var = random.randint(-15, 15)
+                                leaf_pixel = tuple(max(0, min(255, c + color_var)) for c in leaves_color)
+                                surface.set_at((leaf_x + dx, leaf_y + dy), leaf_pixel)
+                            except IndexError:
+                                continue
+
     def update_animations(self):
         """Update subtle grass animations"""
         self.animation_timer += self.ANIMATION_SPEED
@@ -239,135 +352,246 @@ class TerrainGenerator:
             noise_map.append(row)
         return noise_map
         
-    def _add_tree(self, surface, x, y):
-        """Add a tree to the terrain"""
-        trunk_color = (40, 25, 15)
-        leaves_color = random.choice(self.colors['tree'])
-        
-        # Draw trunk
-        trunk_width = random.randint(2, 3)
-        trunk_height = random.randint(6, 8)
-        pygame.draw.rect(surface, trunk_color,
-                        (x + self.tile_size//2 - trunk_width//2,
-                         y + self.tile_size//2,
-                         trunk_width, trunk_height))
-        
-        # Draw leaves
-        leaf_size = random.randint(8, 12)
-        leaf_positions = [
-            (x + self.tile_size//2, y + self.tile_size//2 - leaf_size//2),
-            (x + self.tile_size//2 - leaf_size//2, y + self.tile_size//2 - leaf_size//4),
-            (x + self.tile_size//2 + leaf_size//2, y + self.tile_size//2 - leaf_size//4)
-        ]
-        
-        for pos_x, pos_y in leaf_positions:
-            pygame.draw.circle(surface, leaves_color, (pos_x, pos_y), leaf_size//2)
-            
     def _add_crystal(self, surface, x, y):
-        """Add a magical crystal formation"""
+        """Add mysterious crystal formation"""
         crystal_color = random.choice(self.colors['crystal'])
-        glow_color = (crystal_color[0]+20, crystal_color[1]+20, crystal_color[2]+20)
+        glow_color = (crystal_color[0]+10, crystal_color[1]+10, crystal_color[2]+10)
         
-        # Draw base glow
-        pygame.draw.circle(surface, (*glow_color, 30),
-                         (x + self.tile_size//2, y + self.tile_size//2),
-                         random.randint(6, 8))
+        # Subtle dark glow effect
+        for radius in range(6, 2, -1):
+            alpha = int(60 * (radius/6))  # More subtle glow
+            glow_surface = pygame.Surface((radius*2, radius*2), pygame.SRCALPHA)
+            pygame.draw.circle(glow_surface, (*glow_color, alpha),
+                            (radius, radius), radius)
+            surface.blit(glow_surface,
+                        (x + self.tile_size//2 - radius,
+                         y + self.tile_size//2 - radius))
         
-        # Draw crystal formation
+        # Draw main crystal formation
         crystal_points = []
-        num_crystals = random.randint(3, 5)
+        num_crystals = random.randint(4, 6)
         center_x = x + self.tile_size//2
         center_y = y + self.tile_size//2
         
+        # Create jagged crystal cluster
         for i in range(num_crystals):
-            angle = (i / num_crystals) * 6.28  # 2π
-            length = random.randint(4, 6)
+            angle = (i / num_crystals) * 6.28 + random.uniform(-0.3, 0.3)
+            length = random.randint(4, 7)
             dx = math.cos(angle) * length
             dy = math.sin(angle) * length
-            
             crystal_points.append((center_x + dx, center_y + dy))
             
         if len(crystal_points) >= 3:
+            # Draw darker crystal body
             pygame.draw.polygon(surface, crystal_color, crystal_points)
-            # Add highlight
-            pygame.draw.line(surface, glow_color,
-                           crystal_points[0],
-                           crystal_points[1], 1)
+            
+            # Add dark highlights
+            shadow_color = tuple(max(0, c - 20) for c in crystal_color)
+            
+            # Draw smaller crystals around the main one
+            for i in range(2):
+                angle = random.uniform(0, 6.28)
+                dist = random.randint(3, 5)
+                x_offset = math.cos(angle) * dist
+                y_offset = math.sin(angle) * dist
+                
+                small_crystal_points = []
+                for j in range(3):
+                    small_angle = (j / 3) * 6.28 + random.uniform(-0.2, 0.2)
+                    small_length = random.randint(2, 3)
+                    small_dx = math.cos(small_angle) * small_length
+                    small_dy = math.sin(small_angle) * small_length
+                    small_crystal_points.append((center_x + x_offset + small_dx,
+                                              center_y + y_offset + small_dy))
+                
+                if len(small_crystal_points) >= 3:
+                    pygame.draw.polygon(surface, shadow_color, small_crystal_points)
             
     def _add_ruins(self, surface, x, y):
-        """Add ruins to the terrain"""
+        """Add ancient, dark ruins"""
         ruin_color = random.choice(self.colors['ruins'])
+        shadow_color = tuple(max(0, c - 15) for c in ruin_color)
+        detail_color = (10, 10, 10)  # Very dark details
         
-        # Random ruin type
-        ruin_type = random.randint(0, 2)
+        # Random ruin type with dark fantasy variations
+        ruin_type = random.choice(['dark_pillar', 'broken_wall', 'ancient_arch', 'scattered_ruins'])
         
-        if ruin_type == 0:  # Broken pillar
-            height = random.randint(10, 15)
+        if ruin_type == 'dark_pillar':
+            # Tall, imposing pillar
+            height = random.randint(14, 18)
             width = random.randint(4, 6)
-            pygame.draw.rect(surface, ruin_color,
-                           (x + self.tile_size//2 - width//2,
-                            y + self.tile_size - height,
-                            width, height))
-            # Add cracks
-            for _ in range(2):
-                crack_x = x + self.tile_size//2 + random.randint(-2, 2)
-                crack_y = y + self.tile_size - random.randint(5, height-2)
-                pygame.draw.line(surface, (0, 0, 0),
-                               (crack_x, crack_y),
-                               (crack_x + random.randint(-2, 2),
-                                crack_y + random.randint(2, 4)))
-                
-        elif ruin_type == 1:  # Broken wall
-            pygame.draw.polygon(surface, ruin_color, [
-                (x + 2, y + self.tile_size - 2),
-                (x + self.tile_size - 2, y + self.tile_size - 2),
-                (x + self.tile_size - 4, y + self.tile_size - random.randint(8, 12)),
-                (x + 4, y + self.tile_size - random.randint(6, 10))
-            ])
             
-        else:  # Scattered stones
-            for _ in range(random.randint(3, 5)):
-                stone_size = random.randint(2, 4)
+            # Draw weathered pillar with dark gradient
+            for py in range(height):
+                darkness = int(py / height * 10)  # Gradually darker towards bottom
+                for px in range(width):
+                    if random.random() < 0.9:
+                        pixel_x = x + self.tile_size//2 - width//2 + px
+                        pixel_y = y + self.tile_size - height + py
+                        color_var = random.randint(-5, 5) - darkness
+                        pixel_color = tuple(max(0, min(255, c + color_var)) for c in ruin_color)
+                        surface.set_at((pixel_x, pixel_y), pixel_color)
+            
+            # Add ominous cracks
+            for _ in range(4):
+                crack_x = x + self.tile_size//2 + random.randint(-width//2, width//2)
+                crack_y = y + self.tile_size - random.randint(5, height-2)
+                crack_length = random.randint(4, 6)
+                crack_angle = random.uniform(-0.6, 0.6)
+                
+                # Draw branching cracks
+                for i in range(crack_length):
+                    dx = int(math.cos(crack_angle) * i)
+                    dy = int(math.sin(crack_angle) * i)
+                    surface.set_at((crack_x + dx, crack_y + dy), detail_color)
+                    if random.random() < 0.4:  # Branch crack
+                        branch_length = random.randint(2, 3)
+                        branch_angle = crack_angle + random.uniform(-1, 1)
+                        for j in range(branch_length):
+                            branch_dx = int(math.cos(branch_angle) * j)
+                            branch_dy = int(math.sin(branch_angle) * j)
+                            surface.set_at((crack_x + dx + branch_dx, 
+                                          crack_y + dy + branch_dy), detail_color)
+                    
+        elif ruin_type == 'broken_wall':
+            # Jagged broken wall
+            points = [
+                (x + 2, y + self.tile_size - 2),  # Base left
+                (x + self.tile_size - 2, y + self.tile_size - 2),  # Base right
+                (x + self.tile_size - 4, y + self.tile_size - random.randint(12, 16)),  # Top right
+                (x + self.tile_size//2 + random.randint(-2, 2), 
+                 y + self.tile_size - random.randint(14, 18)),  # Top middle
+                (x + 4, y + self.tile_size - random.randint(10, 14))  # Top left
+            ]
+            
+            # Draw textured wall with shadows
+            pygame.draw.polygon(surface, ruin_color, points)
+            
+            # Add dark weathering and moss
+            for _ in range(6):
+                detail_x = random.randint(points[0][0], points[1][0])
+                detail_y = random.randint(points[4][1], points[1][1])
+                detail_size = random.randint(1, 3)
+                # Dark stains
+                pygame.draw.circle(surface, shadow_color, (detail_x, detail_y), detail_size)
+                # Occasional moss or darker detail
+                if random.random() < 0.3:
+                    moss_color = (20, 30, 15)
+                    pygame.draw.circle(surface, moss_color, 
+                                     (detail_x + random.randint(-1, 1),
+                                      detail_y + random.randint(-1, 1)), 1)
+                
+        elif ruin_type == 'ancient_arch':
+            # Imposing ruined arch
+            arch_height = random.randint(14, 18)
+            arch_width = random.randint(12, 16)
+            center_x = x + self.tile_size//2
+            base_y = y + self.tile_size - 2
+            
+            # Draw weathered pillars
+            for side in [-1, 1]:
+                pillar_x = center_x + side * arch_width//2
+                # Add gradient to pillars
+                for py in range(arch_height):
+                    darkness = int(py / arch_height * 15)
+                    for px in range(3):
+                        if random.random() < 0.9:
+                            pixel_x = pillar_x + px - 1
+                            pixel_y = base_y - py
+                            color_var = random.randint(-5, 5) - darkness
+                            pixel_color = tuple(max(0, min(255, c + color_var)) for c in ruin_color)
+                            surface.set_at((pixel_x, pixel_y), pixel_color)
+            
+            # Draw broken arch top with gaps
+            num_segments = 6
+            for i in range(num_segments):
+                if random.random() < 0.6:  # 60% chance for each segment
+                    angle = (i / (num_segments-1)) * math.pi
+                    x_offset = int(math.cos(angle) * arch_width//2)
+                    y_offset = int(-math.sin(angle) * arch_height//2)
+                    # Draw arch segment with depth
+                    for depth in range(2):
+                        pygame.draw.circle(surface, shadow_color if depth == 0 else ruin_color,
+                                        (center_x + x_offset,
+                                         base_y - arch_height + y_offset + depth), 2)
+                    
+        else:  # scattered_ruins
+            # More varied scattered ruins
+            for _ in range(random.randint(5, 7)):
+                stone_size = random.randint(3, 5)
                 stone_x = x + random.randint(4, self.tile_size-4)
                 stone_y = y + random.randint(4, self.tile_size-4)
-                pygame.draw.rect(surface, ruin_color,
-                               (stone_x, stone_y, stone_size, stone_size))
-                               
+                
+                # Draw textured ruins with shadows
+                for sx in range(-stone_size, stone_size+1):
+                    for sy in range(-stone_size, stone_size+1):
+                        if sx*sx + sy*sy <= stone_size*stone_size:
+                            if random.random() < 0.8:
+                                try:
+                                    # Darker towards the bottom
+                                    darkness = int((sy + stone_size) / (stone_size * 2) * 15)
+                                    color_var = random.randint(-5, 5) - darkness
+                                    stone_pixel = tuple(max(0, min(255, c + color_var)) 
+                                                      for c in ruin_color)
+                                    surface.set_at((stone_x + sx, stone_y + sy), stone_pixel)
+                                except IndexError:
+                                    continue
+                                    
+                # Add occasional dark details
+                if random.random() < 0.4:
+                    detail_x = stone_x + random.randint(-1, 1)
+                    detail_y = stone_y + random.randint(-1, 1)
+                    surface.set_at((detail_x, detail_y), detail_color)
+
     def _add_bonfire(self, surface, x, y):
-        """Add a bonfire with animated-like flames"""
-        # Base structure (stones in a circle)
+        """Add a mystical bonfire"""
+        # Base structure
         center_x = x + self.tile_size // 2
         center_y = y + self.tile_size // 2
         stone_color = random.choice(self.colors['stone'])
         
-        # Draw stone circle
-        for i in range(6):
-            angle = (i / 6) * 6.28
+        # Draw dark stone circle
+        for i in range(7):
+            angle = (i / 7) * 6.28
             stone_x = center_x + math.cos(angle) * 6
             stone_y = center_y + math.sin(angle) * 6
-            pygame.draw.circle(surface, stone_color, (int(stone_x), int(stone_y)), 2)
+            # Draw each stone with slight variation
+            stone_size = random.randint(2, 3)
+            pygame.draw.circle(surface, stone_color, (int(stone_x), int(stone_y)), stone_size)
+            # Add darker edge
+            pygame.draw.circle(surface, (20, 20, 20), (int(stone_x), int(stone_y)), stone_size, 1)
         
-        # Draw logs
-        log_color = (40, 25, 15)
+        # Draw charred logs
+        log_color = (20, 15, 10)  # Very dark brown
+        ember_color = random.choice(self.colors['ember'])
         for i in range(3):
             angle = (i / 3) * 3.14
             log_x = center_x + math.cos(angle) * 3
             log_y = center_y + math.sin(angle) * 3
+            # Draw log with ember effect
             pygame.draw.line(surface, log_color,
                            (log_x - 2, log_y),
                            (log_x + 2, log_y), 2)
+            # Add glowing ember points
+            if random.random() < 0.7:
+                surface.set_at((int(log_x), int(log_y)), ember_color)
         
         # Create particle system for this bonfire
         pos = (center_x, center_y)
         self.bonfire_particles[pos] = BonfireParticleSystem(center_x, center_y - 2)
         
-        # Add base glow effect
-        glow_surface = pygame.Surface((self.tile_size, self.tile_size), pygame.SRCALPHA)
-        pygame.draw.circle(glow_surface, (255, 100, 0, 30),
-                         (self.tile_size//2, self.tile_size//2), 12)
-        surface.blit(glow_surface, (x, y))
+        # Add darker, more subtle glow effect
+        for radius in range(12, 4, -2):
+            alpha = int(20 * (radius/12))  # More subtle glow
+            glow_surface = pygame.Surface((radius*2, radius*2), pygame.SRCALPHA)
+            glow_color = random.choice(self.colors['fire'])
+            pygame.draw.circle(glow_surface, (*glow_color, alpha),
+                             (radius, radius), radius)
+            surface.blit(glow_surface, 
+                        (x + self.tile_size//2 - radius,
+                         y + self.tile_size//2 - radius))
         
-        return pos  # Return position for game logic 
+        return pos
         
     def update_particles(self):
         """Update all particle systems"""
