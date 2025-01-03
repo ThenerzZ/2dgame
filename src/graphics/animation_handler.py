@@ -1,304 +1,311 @@
 import pygame
 import math
 import random
+from enum import Enum
+
+class EaseType(Enum):
+    LINEAR = 0
+    EASE_IN = 1
+    EASE_OUT = 2
+    EASE_IN_OUT = 3
+    BOUNCE = 4
+    ELASTIC = 5
+
+class AnimationState:
+    def __init__(self, name, frames, duration, loop=True, next_state=None, ease_type=EaseType.LINEAR):
+        self.name = name
+        self.frames = frames
+        self.duration = duration
+        self.loop = loop
+        self.next_state = next_state
+        self.ease_type = ease_type
+        self.frame_count = len(frames)
+        
+    def get_progress(self, time):
+        """Get animation progress with easing applied"""
+        progress = (time % self.duration) / self.duration if self.loop else min(time / self.duration, 1)
+        
+        if self.ease_type == EaseType.LINEAR:
+            return progress
+        elif self.ease_type == EaseType.EASE_IN:
+            return progress * progress
+        elif self.ease_type == EaseType.EASE_OUT:
+            return 1 - (1 - progress) * (1 - progress)
+        elif self.ease_type == EaseType.EASE_IN_OUT:
+            if progress < 0.5:
+                return 2 * progress * progress
+            else:
+                return 1 - (-2 * progress + 2) ** 2 / 2
+        elif self.ease_type == EaseType.BOUNCE:
+            if progress < 1 / 2.75:
+                return 7.5625 * progress * progress
+            elif progress < 2 / 2.75:
+                progress -= 1.5 / 2.75
+                return 7.5625 * progress * progress + 0.75
+            elif progress < 2.5 / 2.75:
+                progress -= 2.25 / 2.75
+                return 7.5625 * progress * progress + 0.9375
+            else:
+                progress -= 2.625 / 2.75
+                return 7.5625 * progress * progress + 0.984375
+        elif self.ease_type == EaseType.ELASTIC:
+            if progress == 0 or progress == 1:
+                return progress
+            progress = progress * 2
+            if progress < 1:
+                return -0.5 * (math.pow(2, 10 * (progress - 1)) * math.sin((progress - 1.1) * 5 * math.pi))
+            return 0.5 * math.pow(2, -10 * (progress - 1)) * math.sin((progress - 1.1) * 5 * math.pi) + 1
 
 class AnimationHandler:
     def __init__(self, base_sprite):
         self.base_sprite = base_sprite
-        self.current_frame = 0
-        self.animation_timer = 0
-        self.frame_duration = 6  # Frames per animation state
-        self.movement_bob = 0
-        self.dust_particles = []
+        self.sprite_size = base_sprite.get_width()
+        self.current_time = 0
+        self.animation_states = self._create_animation_states()
+        self.current_state = self.animation_states['idle']
+        self.transition_time = 0
+        self.transition_duration = 5
+        self.prev_frame = self.current_state.frames[0].copy()
+        self.next_frame = None
         
-        # Create animation frames from base sprite
-        self.animations = {
-            'idle': self._generate_idle_frames(),
-            'walk': self._generate_walk_frames(),
-            'attack': self._generate_attack_frames(),
-            'dash': self._generate_dash_frames(),
-            'hurt': self._generate_hurt_frames()
+    def _create_animation_states(self):
+        return {
+            'idle': AnimationState('idle', self._generate_idle_frames(), 60, True, None, EaseType.EASE_IN_OUT),
+            'walk': AnimationState('walk', self._generate_walk_frames(), 48, True, None, EaseType.EASE_IN_OUT),
+            'attack': AnimationState('attack', self._generate_attack_frames(), 30, False, 'idle', EaseType.EASE_OUT),
+            'dash': AnimationState('dash', self._generate_dash_frames(), 20, False, 'idle', EaseType.EASE_OUT),
+            'hurt': AnimationState('hurt', self._generate_hurt_frames(), 20, False, 'idle', EaseType.BOUNCE)
         }
-        self.current_animation = 'idle'
+
+    def _interpolate_frames(self, frame1, frame2, progress):
+        """Simple frame crossfade without using special blend modes"""
+        if progress <= 0:
+            return frame1.copy()
+        if progress >= 1:
+            return frame2.copy()
+            
+        # Create a new surface for the interpolated frame
+        result = pygame.Surface((self.sprite_size, self.sprite_size), pygame.SRCALPHA)
         
+        # Draw first frame with fading opacity
+        frame1_copy = frame1.copy()
+        frame1_copy.set_alpha(int((1 - progress) * 255))
+        result.blit(frame1_copy, (0, 0))
+        
+        # Draw second frame with increasing opacity
+        frame2_copy = frame2.copy()
+        frame2_copy.set_alpha(int(progress * 255))
+        result.blit(frame2_copy, (0, 0))
+        
+        return result
+
     def _generate_idle_frames(self):
-        """Generate improved breathing/floating animation frames"""
         frames = []
-        sprite_size = self.base_sprite.get_width()
         
-        for i in range(6):  # Increased to 6 frames for smoother animation
-            frame = pygame.Surface((sprite_size, sprite_size), pygame.SRCALPHA)
-            # Combine vertical and slight horizontal movement
-            offset_y = math.sin(i * math.pi/3) * 1.5
-            offset_x = math.cos(i * math.pi/3) * 0.5
-            # Add subtle scaling effect
-            scale = 1.0 + math.sin(i * math.pi/3) * 0.02
+        for i in range(8):  # Increased frame count for smoother animation
+            frame = pygame.Surface((self.sprite_size, self.sprite_size), pygame.SRCALPHA)
+            progress = i / 7  # Normalized progress
+            
+            # Smooth breathing motion
+            breath = math.sin(progress * 2 * math.pi)
+            scale_y = 1.0 + breath * 0.02  # Subtle vertical scaling
+            scale_x = 1.0 - breath * 0.01  # Slight horizontal compensation
+            
+            # Apply smooth scaling
             scaled = pygame.transform.scale(
                 self.base_sprite,
-                (int(sprite_size * scale), int(sprite_size * scale))
+                (int(self.sprite_size * scale_x), int(self.sprite_size * scale_y))
             )
-            # Center the scaled sprite
-            x = (sprite_size - scaled.get_width()) // 2 + offset_x
-            y = (sprite_size - scaled.get_height()) // 2 + offset_y
+            
+            # Center the sprite
+            x = (self.sprite_size - scaled.get_width()) // 2
+            y = (self.sprite_size - scaled.get_height()) // 2 + breath * 0.5
+            
             frame.blit(scaled, (x, y))
             frames.append(frame)
             
         return frames
-        
+
     def _generate_walk_frames(self):
-        """Generate improved walking animation frames"""
         frames = []
-        sprite_size = self.base_sprite.get_width()
         
-        for i in range(8):  # Increased to 8 frames for smoother animation
-            frame = pygame.Surface((sprite_size, sprite_size), pygame.SRCALPHA)
-            # Enhanced bobbing motion
-            vertical_offset = math.sin(i * math.pi/4) * 3
-            # Dynamic tilt based on movement
-            tilt = math.sin(i * math.pi/4) * 8
-            # Add squash and stretch
-            stretch = 1.0 + abs(math.sin(i * math.pi/4)) * 0.1
-            squeeze = 1.0 - abs(math.sin(i * math.pi/4)) * 0.1
+        for i in range(8):
+            frame = pygame.Surface((self.sprite_size, self.sprite_size), pygame.SRCALPHA)
+            progress = i / 7
             
-            # Scale sprite with squash and stretch
+            # Smooth walking cycle
+            cycle = math.sin(progress * 2 * math.pi)
+            bounce = abs(math.sin(progress * math.pi * 2))
+            
+            # Dynamic scaling based on walk cycle
+            scale_y = 1.0 + bounce * 0.04  # Vertical stretch during step
+            scale_x = 1.0 - bounce * 0.02  # Slight horizontal squeeze
+            
+            # Forward lean
+            lean = 3 + cycle * 2  # 3 degrees base lean + 2 degrees variation
+            
+            # Scale and rotate
             scaled = pygame.transform.scale(
                 self.base_sprite,
-                (int(sprite_size * squeeze), int(sprite_size * stretch))
+                (int(self.sprite_size * scale_x), int(self.sprite_size * scale_y))
             )
-            # Rotate scaled sprite
-            rotated = pygame.transform.rotate(scaled, tilt)
+            rotated = pygame.transform.rotate(scaled, lean)
             
-            # Position with offset
-            x = (sprite_size - rotated.get_width()) // 2
-            y = (sprite_size - rotated.get_height()) // 2 + vertical_offset
+            # Position with smooth bobbing
+            x = (self.sprite_size - rotated.get_width()) // 2
+            y = (self.sprite_size - rotated.get_height()) // 2 + bounce * 1.5
+            
             frame.blit(rotated, (x, y))
             frames.append(frame)
             
         return frames
-        
+
     def _generate_attack_frames(self):
-        """Generate improved attack animation frames"""
         frames = []
-        sprite_size = self.base_sprite.get_width()
+        keyframes = [
+            # (scale_x, scale_y, rotation, x_offset, y_offset)
+            (0.98, 1.02, 3, -1, 0),    # Anticipation
+            (1.1, 0.95, -10, 2, 0),    # Wind-up
+            (1.15, 0.9, -15, 3, 1),    # Attack
+            (1.05, 0.98, -8, 2, 0),    # Follow through
+            (1.0, 1.0, 0, 0, 0)        # Recovery
+        ]
         
-        # Frame 1: Wind up (anticipation)
-        frame1 = pygame.Surface((sprite_size, sprite_size), pygame.SRCALPHA)
-        scaled1 = pygame.transform.scale(self.base_sprite, 
-                                      (int(sprite_size * 1.1), int(sprite_size * 0.9)))
-        rotated1 = pygame.transform.rotate(scaled1, 15)
-        x1 = (sprite_size - rotated1.get_width()) // 2 - 2
-        y1 = (sprite_size - rotated1.get_height()) // 2
-        frame1.blit(rotated1, (x1, y1))
-        frames.append(frame1)
-        
-        # Frame 2: Attack (stretch)
-        frame2 = pygame.Surface((sprite_size, sprite_size), pygame.SRCALPHA)
-        scaled2 = pygame.transform.scale(self.base_sprite, 
-                                      (int(sprite_size * 1.2), int(sprite_size * 0.8)))
-        rotated2 = pygame.transform.rotate(scaled2, -20)
-        x2 = (sprite_size - rotated2.get_width()) // 2 + 4
-        y2 = (sprite_size - rotated2.get_height()) // 2
-        frame2.blit(rotated2, (x2, y2))
-        frames.append(frame2)
-        
-        # Frame 3: Impact
-        frame3 = pygame.Surface((sprite_size, sprite_size), pygame.SRCALPHA)
-        scaled3 = pygame.transform.scale(self.base_sprite, 
-                                      (int(sprite_size * 1.15), int(sprite_size * 0.85)))
-        rotated3 = pygame.transform.rotate(scaled3, -10)
-        x3 = (sprite_size - rotated3.get_width()) // 2 + 2
-        y3 = (sprite_size - rotated3.get_height()) // 2
-        frame3.blit(rotated3, (x3, y3))
-        frames.append(frame3)
-        
-        # Frame 4: Recovery
-        frame4 = pygame.Surface((sprite_size, sprite_size), pygame.SRCALPHA)
-        scaled4 = pygame.transform.scale(self.base_sprite, 
-                                      (int(sprite_size * 1.05), int(sprite_size * 0.95)))
-        x4 = (sprite_size - scaled4.get_width()) // 2
-        y4 = (sprite_size - scaled4.get_height()) // 2
-        frame4.blit(scaled4, (x4, y4))
-        frames.append(frame4)
-        
-        return frames
-        
-    def _generate_dash_frames(self):
-        """Generate dash animation frames"""
-        frames = []
-        sprite_size = self.base_sprite.get_width()
-        
-        for i in range(4):
-            frame = pygame.Surface((sprite_size, sprite_size), pygame.SRCALPHA)
-            # Horizontal stretch effect
-            stretch = 1.3 - (i / 4) * 0.3
-            squeeze = 0.7 + (i / 4) * 0.3
+        for i in range(5):
+            frame = pygame.Surface((self.sprite_size, self.sprite_size), pygame.SRCALPHA)
+            scale_x, scale_y, rot, off_x, off_y = keyframes[i]
             
+            # Apply transformations
             scaled = pygame.transform.scale(
                 self.base_sprite,
-                (int(sprite_size * stretch), int(sprite_size * squeeze))
+                (int(self.sprite_size * scale_x), int(self.sprite_size * scale_y))
+            )
+            rotated = pygame.transform.rotate(scaled, rot)
+            
+            # Position frame
+            x = (self.sprite_size - rotated.get_width()) // 2 + off_x
+            y = (self.sprite_size - rotated.get_height()) // 2 + off_y
+            
+            frame.blit(rotated, (x, y))
+            frames.append(frame)
+            
+        return frames
+
+    def _generate_dash_frames(self):
+        frames = []
+        keyframes = [
+            # (scale_x, scale_y, rotation, x_offset)
+            (1.2, 0.9, -12, 3),    # Initial burst
+            (1.3, 0.8, -15, 4),    # Maximum stretch
+            (1.25, 0.85, -10, 3),  # Maintain speed
+            (1.1, 0.95, -5, 2),    # Recovery
+        ]
+        
+        for scale_x, scale_y, rot, off_x in keyframes:
+            frame = pygame.Surface((self.sprite_size, self.sprite_size), pygame.SRCALPHA)
+            
+            # Apply motion blur effect
+            blur_steps = 3
+            for j in range(blur_steps):
+                alpha = 128 if j == 0 else 64 // (j + 1)
+                blur_x = off_x * (j / blur_steps)
+                
+                temp = self.base_sprite.copy()
+                temp.set_alpha(alpha)
+                
+                # Scale and rotate
+                scaled = pygame.transform.scale(
+                    temp,
+                    (int(self.sprite_size * scale_x), int(self.sprite_size * scale_y))
+                )
+                rotated = pygame.transform.rotate(scaled, rot)
+                
+                # Position with blur offset
+                x = (self.sprite_size - rotated.get_width()) // 2 + blur_x
+                y = (self.sprite_size - rotated.get_height()) // 2
+                
+                frame.blit(rotated, (x, y))
+            
+            frames.append(frame)
+            
+        return frames
+
+    def _generate_hurt_frames(self):
+        frames = []
+        
+        for i in range(4):
+            frame = pygame.Surface((self.sprite_size, self.sprite_size), pygame.SRCALPHA)
+            progress = i / 3
+            
+            # Flash effect
+            flash_intensity = max(0, 1 - progress * 1.5)
+            red_tint = self.base_sprite.copy()
+            red_tint.fill((255, 0, 0, int(150 * flash_intensity)), special_flags=pygame.BLEND_RGBA_MULT)
+            
+            # Impact deformation
+            if i == 0:
+                scale_x, scale_y = 1.2, 0.8  # Initial impact
+            elif i == 1:
+                scale_x, scale_y = 0.9, 1.1  # Rebound
+            elif i == 2:
+                scale_x, scale_y = 1.1, 0.9  # Secondary impact
+            else:
+                scale_x, scale_y = 1.0, 1.0  # Recovery
+                
+            # Apply scaling
+            scaled = pygame.transform.scale(
+                red_tint,
+                (int(self.sprite_size * scale_x), int(self.sprite_size * scale_y))
             )
             
-            x = (sprite_size - scaled.get_width()) // 2
-            y = (sprite_size - scaled.get_height()) // 2
+            # Add shake effect
+            shake_amount = int((1 - progress) * 4)
+            shake_x = random.randint(-shake_amount, shake_amount)
+            shake_y = random.randint(-shake_amount, shake_amount)
+            
+            # Position with shake
+            x = (self.sprite_size - scaled.get_width()) // 2 + shake_x
+            y = (self.sprite_size - scaled.get_height()) // 2 + shake_y
+            
             frame.blit(scaled, (x, y))
             frames.append(frame)
             
         return frames
-        
-    def _generate_hurt_frames(self):
-        """Generate hurt animation frames"""
-        frames = []
-        sprite_size = self.base_sprite.get_width()
-        
-        for i in range(4):
-            frame = pygame.Surface((sprite_size, sprite_size), pygame.SRCALPHA)
-            # Flash red and shake
-            red_tint = self.base_sprite.copy()
-            red_tint.fill((255, 0, 0, 100), special_flags=pygame.BLEND_RGBA_MULT)
-            
-            # Random shake offset
-            shake_x = random.randint(-2, 2)
-            shake_y = random.randint(-2, 2)
-            
-            frame.blit(red_tint, (shake_x, shake_y))
-            frames.append(frame)
-            
-        return frames
 
     def update(self):
         """Update animation state"""
-        self.animation_timer += 1
-        if self.animation_timer >= self.frame_duration:
-            self.animation_timer = 0
-            self.current_frame = (self.current_frame + 1) % len(self.animations[self.current_animation])
-            
-    def set_animation(self, animation_name):
-        """Change current animation"""
-        if animation_name != self.current_animation:
-            self.current_animation = animation_name
-            self.current_frame = 0
-            self.animation_timer = 0
-            
-    def get_current_frame(self):
-        """Get the current animation frame"""
-        return self.animations[self.current_animation][self.current_frame] 
+        self.current_time += 1
+        
+        # Check for state transition
+        if not self.current_state.loop:
+            progress = self.current_time / self.current_state.duration
+            if progress >= 1 and self.current_state.next_state:
+                self.set_animation(self.current_state.next_state)
 
-class GunAnimationHandler:
-    def __init__(self, gun_sprite):
-        self.gun_sprite = gun_sprite
-        self.current_frame = 0
-        self.animation_timer = 0
-        self.frame_duration = 4  # Faster than character animations
-        self.recoil_offset = 0
-        self.muzzle_flash_alpha = 0
-        
-        # Create animation frames
-        self.animations = {
-            'idle': self._generate_idle_frames(),
-            'shoot': self._generate_shoot_frames(),
-            'reload': self._generate_reload_frames()
-        }
-        self.current_animation = 'idle'
-        
-    def _generate_idle_frames(self):
-        """Generate subtle floating animation for gun"""
-        frames = []
-        sprite_size = self.gun_sprite.get_width()
-        
-        for i in range(4):
-            frame = pygame.Surface((sprite_size, sprite_size), pygame.SRCALPHA)
-            # Subtle hovering effect
-            offset_y = math.sin(i * math.pi/2) * 1
-            offset_x = math.cos(i * math.pi/2) * 0.5
-            frame.blit(self.gun_sprite, (offset_x, offset_y))
-            frames.append(frame)
-            
-        return frames
-        
-    def _generate_shoot_frames(self):
-        """Generate shooting animation with recoil"""
-        frames = []
-        sprite_size = self.gun_sprite.get_width()
-        
-        # Frame 1: Recoil back
-        frame1 = pygame.Surface((sprite_size, sprite_size), pygame.SRCALPHA)
-        rotated1 = pygame.transform.rotate(self.gun_sprite, 15)  # Kick up
-        frame1.blit(rotated1, (-4, 0))  # Recoil back
-        frames.append(frame1)
-        
-        # Frame 2: Maximum recoil
-        frame2 = pygame.Surface((sprite_size, sprite_size), pygame.SRCALPHA)
-        rotated2 = pygame.transform.rotate(self.gun_sprite, 20)
-        frame2.blit(rotated2, (-6, 0))
-        frames.append(frame2)
-        
-        # Frame 3: Recovery
-        frame3 = pygame.Surface((sprite_size, sprite_size), pygame.SRCALPHA)
-        rotated3 = pygame.transform.rotate(self.gun_sprite, 10)
-        frame3.blit(rotated3, (-2, 0))
-        frames.append(frame3)
-        
-        # Frame 4: Return to position
-        frame4 = pygame.Surface((sprite_size, sprite_size), pygame.SRCALPHA)
-        frame4.blit(self.gun_sprite, (0, 0))
-        frames.append(frame4)
-        
-        return frames
-        
-    def _generate_reload_frames(self):
-        """Generate reload animation"""
-        frames = []
-        sprite_size = self.gun_sprite.get_width()
-        
-        for i in range(6):  # 6 frame animation
-            frame = pygame.Surface((sprite_size, sprite_size), pygame.SRCALPHA)
-            # Spin effect
-            angle = i * 60  # 360 degrees / 6 frames
-            rotated = pygame.transform.rotate(self.gun_sprite, angle)
-            # Keep centered during rotation
-            x = (sprite_size - rotated.get_width()) // 2
-            y = (sprite_size - rotated.get_height()) // 2
-            frame.blit(rotated, (x, y))
-            frames.append(frame)
-            
-        return frames
-        
-    def update(self):
-        """Update animation state"""
-        self.animation_timer += 1
-        if self.animation_timer >= self.frame_duration:
-            self.animation_timer = 0
-            self.current_frame = (self.current_frame + 1) % len(self.animations[self.current_animation])
-            
-            # Reset to idle after shoot animation completes
-            if self.current_animation == 'shoot' and self.current_frame == 0:
-                self.current_animation = 'idle'
-                
-        # Update muzzle flash
-        if self.muzzle_flash_alpha > 0:
-            self.muzzle_flash_alpha = max(0, self.muzzle_flash_alpha - 25)
-            
     def set_animation(self, animation_name):
-        """Change current animation"""
-        if animation_name != self.current_animation:
-            self.current_animation = animation_name
-            self.current_frame = 0
-            self.animation_timer = 0
-            
-            # Add muzzle flash when shooting
-            if animation_name == 'shoot':
-                self.muzzle_flash_alpha = 255
-            
+        """Change animation state with smooth transition"""
+        if animation_name != self.current_state.name:
+            self.prev_frame = self.get_current_frame()
+            self.current_state = self.animation_states[animation_name]
+            self.current_time = 0
+            self.transition_time = self.transition_duration
+
     def get_current_frame(self):
-        """Get the current animation frame"""
-        return self.animations[self.current_animation][self.current_frame]
+        """Get current animation frame with interpolation"""
+        # Normal animation playback
+        progress = self.current_state.get_progress(self.current_time)
+        frame_index = int(progress * (self.current_state.frame_count - 1))
         
-    def get_muzzle_flash(self):
-        """Get muzzle flash surface if active"""
-        if self.muzzle_flash_alpha <= 0:
-            return None
+        # Get the current frame
+        current_frame = self.current_state.frames[frame_index]
+        
+        # Handle transition between states
+        if self.transition_time > 0:
+            transition_progress = 1 - (self.transition_time / self.transition_duration)
+            self.transition_time -= 1
             
-        flash = pygame.Surface((20, 20), pygame.SRCALPHA)
-        color = (*YELLOW, self.muzzle_flash_alpha)
-        pygame.draw.circle(flash, color, (10, 10), 10)
-        return flash 
+            # Interpolate between previous and current frame
+            if self.prev_frame is not None:
+                return self._interpolate_frames(self.prev_frame, current_frame, transition_progress)
+        
+        return current_frame.copy()  # Return a copy to prevent modification of original 
