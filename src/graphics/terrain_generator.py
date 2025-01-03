@@ -20,8 +20,69 @@ class TerrainGenerator:
             'ember': [(255, 30, 0), (200, 20, 0), (150, 10, 0)],  # Dark red embers
             'flower': [(80, 20, 30), (70, 15, 25), (90, 25, 35)], # Dark red flowers
             'mushroom': [(50, 10, 10), (40, 8, 8), (60, 12, 12)], # Blood-red mushrooms
-            'water': [(10, 20, 30), (15, 25, 35), (20, 30, 40)]   # Dark murky water
+            'water': [(10, 20, 30), (15, 25, 35), (20, 30, 40)],  # Dark murky water
+            'fog': [(20, 20, 25, 0), (25, 25, 30, 0), (30, 30, 35, 0)],  # Atmospheric fog
+            'snow': [(200, 200, 220), (180, 180, 200), (160, 160, 180)],  # Cold snow
+            'ash': [(50, 50, 55), (45, 45, 50), (40, 40, 45)],    # Dark ash
+            'blood': [(120, 0, 0), (100, 0, 0), (80, 0, 0)]       # Blood rain
         }
+        
+        # Weather types and their properties
+        self.weather_types = {
+            'clear': {
+                'fog_density': 0,
+                'particle_count': 0,
+                'wind_strength': 0.5,
+                'ambient_darkness': 0,
+                'weight': 15  # Higher weight for clear weather
+            },
+            'light_rain': {
+                'fog_density': 20,
+                'particle_count': 50,
+                'wind_strength': 1.0,
+                'ambient_darkness': 20,
+                'weight': 20  # Common weather
+            },
+            'heavy_rain': {
+                'fog_density': 40,
+                'particle_count': 100,
+                'wind_strength': 2.0,
+                'ambient_darkness': 40,
+                'weight': 15
+            },
+            'blood_rain': {
+                'fog_density': 30,
+                'particle_count': 80,
+                'wind_strength': 1.5,
+                'ambient_darkness': 50,
+                'particle_color': 'blood',
+                'weight': 5  # Rare weather
+            },
+            'ash_storm': {
+                'fog_density': 60,
+                'particle_count': 120,
+                'wind_strength': 2.5,
+                'ambient_darkness': 60,
+                'particle_color': 'ash',
+                'weight': 10
+            },
+            'snow': {
+                'fog_density': 30,
+                'particle_count': 70,
+                'wind_strength': 0.8,
+                'ambient_darkness': 10,
+                'particle_color': 'snow',
+                'weight': 15
+            },
+            'heavy_fog': {
+                'fog_density': 80,
+                'particle_count': 0,
+                'wind_strength': 0.3,
+                'ambient_darkness': 30,
+                'weight': 20  # Common weather
+            }
+        }
+        
         self.bonfire_positions = []
         self.bonfire_particles = {}
         
@@ -30,6 +91,191 @@ class TerrainGenerator:
         self.grass_offset = 0
         self.ANIMATION_SPEED = 0.1
         
+        # Weather state
+        self.current_weather = self._get_random_weather()  # Start with random weather
+        self.weather_transition = 0
+        self.weather_duration = random.randint(FPS * 20, FPS * 40)
+        self.weather_timer = 0
+        
+        # Initialize weather effects
+        self.weather_effects = {
+            'particles': [],
+            'fog_particles': [],
+            'puddles': []
+        }
+        self.fog_offset = 0
+        self.wind_direction = random.uniform(-1, 1)
+        self.wind_strength = 1.0
+        
+        # Initialize weather
+        self._init_weather_effects()
+        
+    def _get_random_weather(self):
+        """Get a random weather type based on weights"""
+        total_weight = sum(weather['weight'] for weather in self.weather_types.values())
+        roll = random.uniform(0, total_weight)
+        current_weight = 0
+        
+        for weather_type, properties in self.weather_types.items():
+            current_weight += properties['weight']
+            if roll <= current_weight:
+                return weather_type
+        
+        return 'clear'  # Fallback
+
+    def _init_weather_effects(self):
+        """Initialize weather effects based on current weather type"""
+        weather = self.weather_types[self.current_weather]
+        
+        # Clear existing effects
+        self.weather_effects['particles'].clear()
+        self.weather_effects['fog_particles'].clear()
+        
+        # Initialize particles based on weather type
+        particle_color = weather.get('particle_color', 'water')
+        for _ in range(weather['particle_count']):
+            self.weather_effects['particles'].append({
+                'x': random.randint(0, SCREEN_WIDTH),
+                'y': random.randint(-50, SCREEN_HEIGHT),
+                'speed': random.uniform(10, 15),
+                'size': random.randint(2, 4),
+                'color': random.choice(self.colors[particle_color])
+            })
+            
+        # Initialize fog particles
+        for _ in range(weather['fog_density']):
+            self.weather_effects['fog_particles'].append({
+                'x': random.randint(0, SCREEN_WIDTH),
+                'y': random.randint(0, SCREEN_HEIGHT),
+                'size': random.randint(30, 60),
+                'speed': random.uniform(0.2, 0.5),
+                'alpha': random.randint(5, 20)
+            })
+            
+        # Update wind properties
+        self.wind_strength = weather['wind_strength']
+        self.wind_direction = random.uniform(-1, 1)
+
+    def update_weather(self):
+        """Update weather effects and handle weather transitions"""
+        # Update weather timer and check for weather change
+        self.weather_timer += 1
+        if self.weather_timer >= self.weather_duration:
+            self._change_weather()
+            self.weather_timer = 0
+            self.weather_duration = random.randint(FPS * 20, FPS * 40)
+        
+        weather = self.weather_types[self.current_weather]
+        
+        # Update particles
+        for particle in self.weather_effects['particles']:
+            particle['y'] += particle['speed']
+            particle['x'] += self.wind_direction * self.wind_strength
+            
+            # Reset particles that go off screen
+            if particle['y'] > SCREEN_HEIGHT:
+                particle['y'] = random.randint(-50, -10)
+                particle['x'] = random.randint(0, SCREEN_WIDTH)
+                
+                # Create puddle effects for rain-type weather
+                if self.current_weather in ['light_rain', 'heavy_rain', 'blood_rain']:
+                    self._create_ripple(particle['x'], SCREEN_HEIGHT)
+            
+            # Wrap particles horizontally
+            if particle['x'] > SCREEN_WIDTH:
+                particle['x'] = 0
+            elif particle['x'] < 0:
+                particle['x'] = SCREEN_WIDTH
+                
+        # Update fog particles
+        for particle in self.weather_effects['fog_particles']:
+            particle['x'] += particle['speed'] * self.wind_direction
+            if particle['x'] > SCREEN_WIDTH:
+                particle['x'] = -particle['size']
+            elif particle['x'] < -particle['size']:
+                particle['x'] = SCREEN_WIDTH
+
+    def _change_weather(self):
+        """Randomly change the weather based on weights"""
+        # Get list of possible weather types excluding current
+        possible_weather = list(self.weather_types.keys())
+        possible_weather.remove(self.current_weather)
+        
+        # Calculate total weight of possible weather types
+        total_weight = sum(self.weather_types[w]['weight'] for w in possible_weather)
+        roll = random.uniform(0, total_weight)
+        current_weight = 0
+        
+        # Select new weather type based on weights
+        for weather_type in possible_weather:
+            current_weight += self.weather_types[weather_type]['weight']
+            if roll <= current_weight:
+                self.current_weather = weather_type
+                break
+        
+        # Reinitialize weather effects for new weather
+        self._init_weather_effects()
+
+    def draw_weather(self, screen):
+        """Draw weather effects based on current weather type"""
+        weather = self.weather_types[self.current_weather]
+        
+        # Draw fog layer
+        if weather['fog_density'] > 0:
+            fog_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            for particle in self.weather_effects['fog_particles']:
+                fog_color = (*random.choice(self.colors['fog'])[:3], 
+                           particle['alpha'] * (weather['fog_density'] / 80))
+                pygame.draw.circle(fog_surface, fog_color,
+                                (int(particle['x']), int(particle['y'])),
+                                particle['size'])
+            screen.blit(fog_surface, (0, 0))
+        
+        # Draw weather particles
+        if weather['particle_count'] > 0:
+            particle_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            for particle in self.weather_effects['particles']:
+                if self.current_weather == 'snow':
+                    # Draw snowflakes
+                    pygame.draw.circle(particle_surface, particle['color'],
+                                    (int(particle['x']), int(particle['y'])),
+                                    particle['size'])
+                elif self.current_weather == 'ash_storm':
+                    # Draw ash particles
+                    pygame.draw.rect(particle_surface, particle['color'],
+                                   (int(particle['x']), int(particle['y']),
+                                    particle['size'], particle['size']))
+                else:
+                    # Draw rain/blood rain drops
+                    end_x = particle['x'] + self.wind_direction * particle['size']
+                    pygame.draw.line(particle_surface, particle['color'],
+                                   (particle['x'], particle['y']),
+                                   (end_x, particle['y'] + particle['size'] * 2))
+            
+            screen.blit(particle_surface, (0, 0))
+        
+        # Apply ambient darkness
+        if weather['ambient_darkness'] > 0:
+            darkness = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            darkness.fill((0, 0, 0, weather['ambient_darkness']))
+            screen.blit(darkness, (0, 0))
+
+    def _create_ripple(self, x, y):
+        """Create a ripple effect in the nearest puddle"""
+        nearest_puddle = None
+        min_dist = float('inf')
+        
+        for puddle in self.weather_effects['puddles']:
+            dx = puddle['x'] - x
+            dy = puddle['y'] - y
+            dist = dx*dx + dy*dy
+            if dist < min_dist and puddle['ripple'] == 0:
+                min_dist = dist
+                nearest_puddle = puddle
+                
+        if nearest_puddle and min_dist < 2500:  # Only create ripple if rain hits near puddle
+            nearest_puddle['ripple'] = 1
+
     def generate_tile(self, type='grass'):
         """Generate a single tile with pixel-perfect details"""
         surface = pygame.Surface((self.tile_size, self.tile_size))

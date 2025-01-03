@@ -111,6 +111,9 @@ class GameState:
             # Update grass animations
             self.terrain_gen.update_animations()
             
+            # Update weather effects
+            self.terrain_gen.update_weather()
+            
             # Check for bonfire healing
             self.check_bonfire_healing()
             
@@ -178,6 +181,9 @@ class GameState:
                 
             # Draw particle effects
             self.terrain_gen.draw_particles(screen)
+            
+            # Draw weather effects
+            self.terrain_gen.draw_weather(screen)
             
             # Draw HUD
             self.hud.draw(screen, self.player, self.score, self.current_round, self.round_timer)
