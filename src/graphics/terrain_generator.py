@@ -1,7 +1,8 @@
 import pygame
 import random
-import noise
 import math
+from noise import pnoise2
+from game.settings import *
 from graphics.particles import BonfireParticleSystem
 
 class TerrainGenerator:
@@ -20,6 +21,11 @@ class TerrainGenerator:
         }
         self.bonfire_positions = []  # Store bonfire positions for game logic
         self.bonfire_particles = {}  # Store particle systems for each bonfire
+        
+        # Animation settings
+        self.animation_timer = 0
+        self.grass_offset = 0
+        self.ANIMATION_SPEED = 0.1  # Lower = slower
         
     def generate_tile(self, type='grass'):
         """Generate a single tile with pixel-perfect details"""
@@ -49,8 +55,9 @@ class TerrainGenerator:
         return surface
         
     def _add_grass_details(self, surface):
-        """Add grass-like details"""
-        for _ in range(random.randint(2, 4)):
+        """Add grass-like details with subtle animation support"""
+        # Add static grass details
+        for _ in range(random.randint(3, 5)):
             x = random.randint(0, self.tile_size-2)
             height = random.randint(2, 4)
             color = random.choice(self.colors['detail'])
@@ -61,6 +68,15 @@ class TerrainGenerator:
                 surface.set_at((x, pos_y), color)
                 if random.random() < 0.5:  # 50% chance for wider grass
                     surface.set_at((x+1, pos_y), color)
+        
+        # Add a few taller grass blades that can be animated
+        for _ in range(2):
+            x = random.randint(2, self.tile_size-3)
+            height = random.randint(4, 6)
+            color = random.choice(self.colors['grass'])
+            
+            # Store position for animation
+            surface.set_at((x, self.tile_size - height), (*color, 128))  # Semi-transparent marker
                     
     def _add_stone_details(self, surface):
         """Add stone-like details"""
@@ -77,19 +93,54 @@ class TerrainGenerator:
                 
     def _add_path_details(self, surface):
         """Add path-like details"""
+        # Add some scattered dirt/gravel details
         for _ in range(random.randint(4, 6)):
-            x = random.randint(0, self.tile_size-1)
-            y = random.randint(0, self.tile_size-1)
+            x = random.randint(2, self.tile_size-3)
+            y = random.randint(2, self.tile_size-3)
+            size = random.randint(1, 2)
             color = random.choice(self.colors['detail'])
             
-            # Draw small stones
-            surface.set_at((x, y), color)
-            if random.random() < 0.3:  # 30% chance for larger stones
-                for dx, dy in [(-1,0), (1,0), (0,-1), (0,1)]:
-                    new_x, new_y = x + dx, y + dy
-                    if 0 <= new_x < self.tile_size and 0 <= new_y < self.tile_size:
-                        surface.set_at((new_x, new_y), color)
+            # Draw small gravel/dirt patches
+            for dx in range(size):
+                for dy in range(size):
+                    if random.random() < 0.7:  # 70% chance to draw each pixel
+                        surface.set_at((x + dx, y + dy), color)
                         
+        # Add some path edge variation
+        for _ in range(2):
+            x = random.randint(0, self.tile_size-1)
+            height = random.randint(2, 3)
+            color = random.choice(self.colors['path'])
+            
+            # Draw edge detail
+            for y in range(height):
+                if random.random() < 0.8:  # 80% chance to draw each pixel
+                    surface.set_at((x, y), color)
+        
+    def update_animations(self):
+        """Update subtle grass animations"""
+        self.animation_timer += self.ANIMATION_SPEED
+        self.grass_offset = math.sin(self.animation_timer) * 1.5  # Subtle movement
+        
+    def draw_animated_details(self, screen, pos, tile_type):
+        """Draw animated details over the base terrain"""
+        if tile_type == 'grass':
+            # Draw animated grass blades
+            x, y = pos
+            offset = int(self.grass_offset)
+            color = random.choice(self.colors['grass'])
+            
+            # Draw a few subtle swaying grass blades
+            for i in range(2):
+                blade_x = x + random.randint(2, self.tile_size-3)
+                height = random.randint(4, 6)
+                top_x = blade_x + offset
+                
+                if 0 <= top_x < SCREEN_WIDTH:  # Ensure we don't draw outside screen
+                    pygame.draw.line(screen, color, 
+                                   (blade_x, y + self.tile_size - height),
+                                   (top_x, y + self.tile_size - height - 2), 1) 
+        
     def generate_chunk(self, width, height, seed=None):
         """Generate a chunk of terrain using Perlin noise"""
         if seed:
@@ -169,25 +220,25 @@ class TerrainGenerator:
             self._add_bonfire(chunk_surface, pos[0] - self.tile_size//2, pos[1] - self.tile_size//2)
         
         return chunk_surface
-
+        
     def _generate_noise_map(self, width, height, scale, octaves, persistence, lacunarity, seed=None):
         """Generate a noise map with given parameters"""
         noise_map = []
         for y in range(height):
             row = []
             for x in range(width):
-                n = noise.pnoise2(x/scale, 
-                                y/scale, 
-                                octaves=octaves, 
-                                persistence=persistence, 
-                                lacunarity=lacunarity, 
-                                repeatx=width, 
-                                repeaty=height, 
-                                base=seed if seed else 0)
+                n = pnoise2(x/scale, 
+                          y/scale, 
+                          octaves=octaves, 
+                          persistence=persistence, 
+                          lacunarity=lacunarity, 
+                          repeatx=width, 
+                          repeaty=height, 
+                          base=seed if seed else 0)
                 row.append(n)
             noise_map.append(row)
         return noise_map
-
+        
     def _add_tree(self, surface, x, y):
         """Add a tree to the terrain"""
         trunk_color = (40, 25, 15)
@@ -211,7 +262,38 @@ class TerrainGenerator:
         
         for pos_x, pos_y in leaf_positions:
             pygame.draw.circle(surface, leaves_color, (pos_x, pos_y), leaf_size//2)
-
+            
+    def _add_crystal(self, surface, x, y):
+        """Add a magical crystal formation"""
+        crystal_color = random.choice(self.colors['crystal'])
+        glow_color = (crystal_color[0]+20, crystal_color[1]+20, crystal_color[2]+20)
+        
+        # Draw base glow
+        pygame.draw.circle(surface, (*glow_color, 30),
+                         (x + self.tile_size//2, y + self.tile_size//2),
+                         random.randint(6, 8))
+        
+        # Draw crystal formation
+        crystal_points = []
+        num_crystals = random.randint(3, 5)
+        center_x = x + self.tile_size//2
+        center_y = y + self.tile_size//2
+        
+        for i in range(num_crystals):
+            angle = (i / num_crystals) * 6.28  # 2π
+            length = random.randint(4, 6)
+            dx = math.cos(angle) * length
+            dy = math.sin(angle) * length
+            
+            crystal_points.append((center_x + dx, center_y + dy))
+            
+        if len(crystal_points) >= 3:
+            pygame.draw.polygon(surface, crystal_color, crystal_points)
+            # Add highlight
+            pygame.draw.line(surface, glow_color,
+                           crystal_points[0],
+                           crystal_points[1], 1)
+            
     def _add_ruins(self, surface, x, y):
         """Add ruins to the terrain"""
         ruin_color = random.choice(self.colors['ruins'])
@@ -250,38 +332,7 @@ class TerrainGenerator:
                 stone_y = y + random.randint(4, self.tile_size-4)
                 pygame.draw.rect(surface, ruin_color,
                                (stone_x, stone_y, stone_size, stone_size))
-
-    def _add_crystal(self, surface, x, y):
-        """Add a magical crystal formation"""
-        crystal_color = random.choice(self.colors['crystal'])
-        glow_color = (crystal_color[0]+20, crystal_color[1]+20, crystal_color[2]+20)
-        
-        # Draw base glow
-        pygame.draw.circle(surface, (*glow_color, 30),
-                         (x + self.tile_size//2, y + self.tile_size//2),
-                         random.randint(6, 8))
-        
-        # Draw crystal formation
-        crystal_points = []
-        num_crystals = random.randint(3, 5)
-        center_x = x + self.tile_size//2
-        center_y = y + self.tile_size//2
-        
-        for i in range(num_crystals):
-            angle = (i / num_crystals) * 6.28  # 2π
-            length = random.randint(4, 6)
-            dx = math.cos(angle) * length
-            dy = math.sin(angle) * length
-            
-            crystal_points.append((center_x + dx, center_y + dy))
-            
-        if len(crystal_points) >= 3:
-            pygame.draw.polygon(surface, crystal_color, crystal_points)
-            # Add highlight
-            pygame.draw.line(surface, glow_color,
-                           crystal_points[0],
-                           crystal_points[1], 1) 
-
+                               
     def _add_bonfire(self, surface, x, y):
         """Add a bonfire with animated-like flames"""
         # Base structure (stones in a circle)
@@ -316,14 +367,14 @@ class TerrainGenerator:
                          (self.tile_size//2, self.tile_size//2), 12)
         surface.blit(glow_surface, (x, y))
         
-        return pos  # Return position for game logic
-
+        return pos  # Return position for game logic 
+        
     def update_particles(self):
-        """Update all bonfire particle systems"""
+        """Update all particle systems"""
         for particle_system in self.bonfire_particles.values():
             particle_system.update()
-
-    def draw_particles(self, surface):
-        """Draw all bonfire particle effects"""
+            
+    def draw_particles(self, screen):
+        """Draw all particle systems"""
         for particle_system in self.bonfire_particles.values():
-            particle_system.draw(surface) 
+            particle_system.draw(screen) 

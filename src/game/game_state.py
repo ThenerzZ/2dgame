@@ -108,6 +108,9 @@ class GameState:
             # Update particle effects
             self.terrain_gen.update_particles()
             
+            # Update grass animations
+            self.terrain_gen.update_animations()
+            
             # Check for bonfire healing
             self.check_bonfire_healing()
             
@@ -150,8 +153,16 @@ class GameState:
             self.start_menu.draw(screen)
             
         elif self.state == GameStates.PLAYING:
-            # Draw game world
+            # Draw base terrain
             screen.blit(self.terrain, (0, 0))
+            
+            # Draw animated grass details
+            for y in range(SCREEN_HEIGHT // self.terrain_gen.tile_size):
+                for x in range(SCREEN_WIDTH // self.terrain_gen.tile_size):
+                    pos = (x * self.terrain_gen.tile_size, y * self.terrain_gen.tile_size)
+                    # Only animate grass tiles
+                    if self.terrain.get_at((pos[0], pos[1]))[:3] in self.terrain_gen.colors['grass']:
+                        self.terrain_gen.draw_animated_details(screen, pos, 'grass')
             
             # Draw bonfire effects
             for pos in self.bonfire_cooldowns:
