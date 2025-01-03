@@ -11,6 +11,7 @@ GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 GOLD = (255, 215, 0)
 GRAY = (128, 128, 128)
+ORANGE = (255, 140, 0)
 
 # Player settings
 PLAYER_SPEED = 6
@@ -38,6 +39,13 @@ ENEMY_BASE_STATS = {
     "damage": 5,
     "speed": 3,
 }
+
+# Bonfire settings
+BONFIRE_HEAL_AMOUNT = 75       # Increased healing amount
+BONFIRE_HEAL_RADIUS = 48       # Increased activation radius
+BONFIRE_COOLDOWN = 180         # Reduced cooldown to 3 seconds
+BONFIRE_MIN_DISTANCE = 150     # Minimum distance between bonfires
+BONFIRE_COUNT = 5              # Number of bonfires to spawn
 
 # Shop settings
 SHOP_REFRESH_COST = 20

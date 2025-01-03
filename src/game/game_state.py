@@ -7,6 +7,7 @@ from graphics.terrain_generator import TerrainGenerator
 from graphics.character_generator import CharacterGenerator
 from game.settings import *
 import random
+import math
 
 class GameState:
     def __init__(self):
@@ -29,6 +30,9 @@ class GameState:
         self.score = 0
         self.game_over = False
         self.round_started = False
+        
+        # Bonfire system
+        self.bonfire_cooldowns = {pos: 0 for pos in self.terrain_gen.bonfire_positions}
         
         # Give initial money for start menu purchases
         self.player.money = PLAYER_START_MONEY
@@ -53,6 +57,14 @@ class GameState:
             # Update enemies and handle combat
             self.update_enemies()
             self.handle_combat()
+            
+            # Update bonfire cooldowns
+            for pos in self.bonfire_cooldowns:
+                if self.bonfire_cooldowns[pos] > 0:
+                    self.bonfire_cooldowns[pos] -= 1
+            
+            # Check for bonfire healing
+            self.check_bonfire_healing()
             
             # Remove dead enemies and spawn new ones
             self.enemies = [e for e in self.enemies if not e.is_dead]
@@ -95,6 +107,38 @@ class GameState:
                 if self.player.take_damage(enemy.damage):
                     self.game_over = True
 
+    def check_bonfire_healing(self):
+        """Check if player is near a bonfire and apply healing"""
+        player_center = self.player.rect.center
+        
+        for bonfire_pos in self.terrain_gen.bonfire_positions:
+            # Skip if bonfire is on cooldown
+            if self.bonfire_cooldowns[bonfire_pos] > 0:
+                continue
+                
+            # Check if player is in range
+            dx = player_center[0] - bonfire_pos[0]
+            dy = player_center[1] - bonfire_pos[1]
+            distance = math.sqrt(dx * dx + dy * dy)
+            
+            if distance <= BONFIRE_HEAL_RADIUS:
+                # Heal player and start cooldown
+                self.player.heal(BONFIRE_HEAL_AMOUNT)
+                self.bonfire_cooldowns[bonfire_pos] = BONFIRE_COOLDOWN
+                # Create healing effect
+                self.create_heal_effect(player_center)
+
+    def create_heal_effect(self, position):
+        """Create a visual healing effect"""
+        effect_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        
+        # Draw healing circles
+        for radius in range(5, 20, 2):
+            alpha = int(255 * (1 - radius/20))  # Fade out with distance
+            pygame.draw.circle(effect_surface, (*GREEN, alpha), position, radius, 1)
+            
+        return effect_surface
+
     def draw(self, screen):
         if not self.round_started:
             # Draw start menu
@@ -102,6 +146,14 @@ class GameState:
         else:
             # Draw terrain
             screen.blit(self.terrain, (0, 0))
+            
+            # Draw bonfire cooldown indicators
+            for pos in self.bonfire_cooldowns:
+                if self.bonfire_cooldowns[pos] > 0:
+                    # Draw cooldown circle
+                    progress = self.bonfire_cooldowns[pos] / BONFIRE_COOLDOWN
+                    radius = BONFIRE_HEAL_RADIUS * (1 - progress)
+                    pygame.draw.circle(screen, (*ORANGE, 30), pos, int(radius), 1)
             
             # Draw game entities
             self.player.draw(screen)
