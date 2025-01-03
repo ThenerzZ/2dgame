@@ -6,6 +6,8 @@ from items.inventory import Inventory
 from graphics.animation_handler import AnimationHandler
 from graphics.bullet_particles import BulletParticleSystem
 from graphics.gun_animation_handler import GunAnimationHandler
+from graphics.equipment_sprites import EquipmentSprites
+from items.item_base import ItemType
 
 class Player:
     def __init__(self, character_sprite=None):
@@ -16,6 +18,12 @@ class Player:
         self.speed = PLAYER_SPEED
         self.direction = pygame.math.Vector2()
         self.facing_left = False
+        
+        # Equipment system
+        self.equipment_sprites = EquipmentSprites(PLAYER_SIZE)
+        self.equipped_weapon = None
+        self.weapon_sprite = None
+        self.armor_overlays = []  # List of armor visual effects
         
         # Animation system
         if self.sprite:
@@ -52,6 +60,9 @@ class Player:
         # Stat multipliers from items
         self.stat_multipliers = {stat: 1.0 for stat in self.stats.keys()}
         
+        # Temporary buffs system
+        self.temporary_buffs = {}  # {stat_name: [(multiplier, remaining_time), ...]}
+        
         # Attack cooldown
         self.attack_cooldown = 0
         self.attack_timer = 0
@@ -60,10 +71,33 @@ class Player:
         self.is_attacking = False
         self.attack_animation_timer = 0
         self.attack_animation_duration = 5
+
+    def equip_item(self, item):
+        """Handle equipping an item and updating visuals"""
+        if item.item_type == ItemType.ACTIVE:
+            self.equipped_weapon = item
+            self.weapon_sprite = self.equipment_sprites.generate_weapon_sprite(item.name)
+        elif item.item_type == ItemType.PASSIVE:
+            # Generate armor overlay if the item has a visual effect
+            overlay = self.equipment_sprites.generate_armor_overlay(item.name)
+            if overlay:
+                self.armor_overlays.append(overlay)
         
-        # Gun position offset
-        self.gun_offset_x = 20  # Pixels from center
-        self.gun_offset_y = 0   # Pixels from center
+        # Apply item stats
+        item.apply_effect(self)
+
+    def unequip_item(self, item):
+        """Handle unequipping an item and removing visuals"""
+        if item.item_type == ItemType.ACTIVE and self.equipped_weapon == item:
+            self.equipped_weapon = None
+            self.weapon_sprite = None
+        elif item.item_type == ItemType.PASSIVE:
+            # Remove armor overlay if it exists
+            self.armor_overlays = [overlay for overlay in self.armor_overlays 
+                                 if overlay != self.equipment_sprites.generate_armor_overlay(item.name)]
+        
+        # Remove item stats
+        item.remove_effect(self)
 
     def input(self):
         keys = pygame.key.get_pressed()
@@ -139,36 +173,39 @@ class Player:
         # Update bullet system
         self.bullet_system.update()
         
+        # Update temporary buffs
+        self._update_temporary_buffs()
+
     def draw(self, screen):
         # Draw character sprite with animations or fallback to rectangle
         if self.animator:
             current_frame = self.animator.get_current_frame()
             sprite = pygame.transform.flip(current_frame, self.facing_left, False)
+            
+            # Draw base character
             screen.blit(sprite, self.rect)
             
-            # Draw gun with proper positioning and rotation
-            if self.gun_animator:
-                gun_frame = self.gun_animator.get_current_frame()
-                # Calculate gun position
-                gun_x = self.rect.centerx + (self.gun_offset_x if not self.facing_left else -self.gun_offset_x)
-                gun_y = self.rect.centery + self.gun_offset_y
+            # Draw armor overlays
+            for overlay in self.armor_overlays:
+                overlay_flipped = pygame.transform.flip(overlay, self.facing_left, False)
+                screen.blit(overlay_flipped, self.rect)
+            
+            # Draw equipped weapon
+            if self.weapon_sprite:
+                # Calculate weapon position and rotation
+                weapon_x = self.rect.centerx + (self.gun_offset_x if not self.facing_left else -self.gun_offset_x)
+                weapon_y = self.rect.centery + self.gun_offset_y
                 
-                # Rotate gun
-                rotated_gun = pygame.transform.rotate(gun_frame, -self.gun_angle)
-                gun_rect = rotated_gun.get_rect(center=(gun_x, gun_y))
+                # Rotate weapon
+                rotated_weapon = pygame.transform.rotate(self.weapon_sprite, -self.gun_angle)
+                weapon_rect = rotated_weapon.get_rect(center=(weapon_x, weapon_y))
                 
-                # Draw gun
-                screen.blit(rotated_gun, gun_rect)
+                # Draw weapon
+                screen.blit(rotated_weapon, weapon_rect)
                 
-                # Draw muzzle flash if shooting
-                muzzle_flash = self.gun_animator.get_muzzle_flash()
-                if muzzle_flash:
-                    # Calculate muzzle position based on gun angle
-                    flash_offset = 24  # Distance from gun center
-                    flash_x = gun_x + math.cos(math.radians(self.gun_angle)) * flash_offset
-                    flash_y = gun_y + math.sin(math.radians(self.gun_angle)) * flash_offset
-                    flash_rect = muzzle_flash.get_rect(center=(flash_x, flash_y))
-                    screen.blit(muzzle_flash, flash_rect)
+                # Draw attack effects if attacking
+                if self.is_attacking and self.equipped_weapon:
+                    self._draw_attack_effects(screen, weapon_x, weapon_y)
         else:
             pygame.draw.rect(screen, self.color, self.rect)
         
@@ -176,7 +213,47 @@ class Player:
         self.bullet_system.draw(screen)
         
         self.draw_health_bar(screen)
+
+    def _draw_attack_effects(self, screen, weapon_x, weapon_y):
+        """Draw weapon-specific attack effects"""
+        if self.equipped_weapon.name == "Magic Wand":
+            # Magic sparkle effect
+            for _ in range(3):
+                angle = self.gun_angle + random.uniform(-30, 30)
+                distance = random.uniform(15, 25)
+                effect_x = weapon_x + math.cos(math.radians(angle)) * distance
+                effect_y = weapon_y + math.sin(math.radians(angle)) * distance
+                
+                pygame.draw.circle(screen, (100, 200, 255, 150), (int(effect_x), int(effect_y)), 2)
         
+        elif self.equipped_weapon.name == "Fire Wand":
+            # Fire trail effect
+            for _ in range(5):
+                angle = self.gun_angle + random.uniform(-20, 20)
+                distance = random.uniform(10, 30)
+                effect_x = weapon_x + math.cos(math.radians(angle)) * distance
+                effect_y = weapon_y + math.sin(math.radians(angle)) * distance
+                
+                size = random.uniform(2, 4)
+                alpha = int(255 * (1 - distance/30))
+                pygame.draw.circle(screen, (255, 100, 0, alpha), 
+                                 (int(effect_x), int(effect_y)), int(size))
+        
+        elif self.equipped_weapon.name == "Lightning Ring":
+            # Lightning effect
+            for _ in range(2):
+                start_angle = self.gun_angle + random.uniform(-30, 30)
+                points = [(weapon_x, weapon_y)]
+                
+                for _ in range(3):
+                    angle = start_angle + random.uniform(-45, 45)
+                    length = random.uniform(10, 20)
+                    x = points[-1][0] + math.cos(math.radians(angle)) * length
+                    y = points[-1][1] + math.sin(math.radians(angle)) * length
+                    points.append((x, y))
+                
+                pygame.draw.lines(screen, (100, 150, 255, 180), False, points, 2)
+
     def draw_health_bar(self, screen):
         bar_width = 50
         bar_height = 5
@@ -189,10 +266,17 @@ class Player:
         pygame.draw.rect(screen, GREEN, (*bar_pos, health_width, bar_height))
         
     def get_stat(self, stat_name):
-        """Get a stat's current value including item modifiers"""
+        """Get a stat's current value including item modifiers and temporary buffs"""
         base_value = self.stats.get(stat_name, 0)
-        multiplier = self.stat_multipliers.get(stat_name, 1.0)
-        return base_value * multiplier
+        permanent_multiplier = self.stat_multipliers.get(stat_name, 1.0)
+        
+        # Apply temporary buffs
+        temp_multiplier = 1.0
+        if stat_name in self.temporary_buffs:
+            for mult, _ in self.temporary_buffs[stat_name]:
+                temp_multiplier *= mult
+                
+        return base_value * permanent_multiplier * temp_multiplier
         
     def modify_stat(self, stat_name, multiplier):
         """Modify a stat's multiplier (used by items)"""
@@ -281,3 +365,35 @@ class Player:
         dy = enemy.rect.centery - self.rect.centery
         distance = math.sqrt(dx * dx + dy * dy)
         return distance <= self.get_stat("attack_range") 
+
+    def add_temporary_buff(self, stat_name, multiplier, duration):
+        """Add a temporary buff to a stat"""
+        if stat_name not in self.temporary_buffs:
+            self.temporary_buffs[stat_name] = []
+        self.temporary_buffs[stat_name].append([multiplier, duration * FPS])  # Convert duration to frames
+        
+    def _update_temporary_buffs(self):
+        """Update all temporary buffs"""
+        for stat_name in list(self.temporary_buffs.keys()):
+            # Update each buff for this stat
+            self.temporary_buffs[stat_name] = [
+                [mult, time - 1] for mult, time in self.temporary_buffs[stat_name]
+                if time > 0
+            ]
+            
+            # Remove the stat entry if no buffs remain
+            if not self.temporary_buffs[stat_name]:
+                del self.temporary_buffs[stat_name]
+                
+    def get_stat(self, stat_name):
+        """Get a stat's current value including item modifiers and temporary buffs"""
+        base_value = self.stats.get(stat_name, 0)
+        permanent_multiplier = self.stat_multipliers.get(stat_name, 1.0)
+        
+        # Apply temporary buffs
+        temp_multiplier = 1.0
+        if stat_name in self.temporary_buffs:
+            for mult, _ in self.temporary_buffs[stat_name]:
+                temp_multiplier *= mult
+                
+        return base_value * permanent_multiplier * temp_multiplier 

@@ -1,14 +1,7 @@
 import pygame
 import random
 from game.settings import *
-
-class Item:
-    def __init__(self, name, description, cost, rarity, effect):
-        self.name = name
-        self.description = description
-        self.cost = cost
-        self.rarity = rarity
-        self.effect = effect
+from items.item_pool import ITEM_POOL
 
 class Shop:
     def __init__(self):
@@ -47,53 +40,31 @@ class Shop:
     def refresh_items(self):
         """Generate new items for the shop"""
         self.items = []
-        for _ in range(SHOP_ITEMS_DISPLAYED):
-            self.items.append(self.generate_random_item())
-            
-    def generate_random_item(self):
-        """Generate a random item with appropriate stats"""
-        # Determine rarity
-        roll = random.random() * 100
-        cumulative = 0
-        selected_rarity = "COMMON"
+        available_items = ITEM_POOL.copy()
         
-        for rarity, chance in ITEM_RARITY.items():
-            cumulative += chance
-            if roll <= cumulative:
-                selected_rarity = rarity
+        # Select random items based on rarity weights
+        for _ in range(SHOP_ITEMS_DISPLAYED):
+            if not available_items:
                 break
                 
-        # Item pools based on rarity
-        items = {
-            "COMMON": [
-                ("Sharp Blade", "Damage +10%", 50, lambda p: p.modify_stat("damage", 1.1)),
-                ("Running Shoes", "Speed +10%", 50, lambda p: p.modify_stat("move_speed", 1.1)),
-                ("Leather Armor", "Defense +10%", 50, lambda p: p.modify_stat("defense", 1.1)),
-            ],
-            "RARE": [
-                ("Enchanted Sword", "Damage +20%", 100, lambda p: p.modify_stat("damage", 1.2)),
-                ("Swift Boots", "Speed +20%", 100, lambda p: p.modify_stat("move_speed", 1.2)),
-                ("Steel Armor", "Defense +20%", 100, lambda p: p.modify_stat("defense", 1.2)),
-                ("Quick Loader", "Attack Speed +15%", 100, lambda p: p.modify_stat("attack_speed", 1.15)),
-            ],
-            "EPIC": [
-                ("Ancient Blade", "Damage +35%", 200, lambda p: p.modify_stat("damage", 1.35)),
-                ("Hermes Boots", "Speed +35%", 200, lambda p: p.modify_stat("move_speed", 1.35)),
-                ("Dragon Scale", "Defense +35%", 200, lambda p: p.modify_stat("defense", 1.35)),
-                ("Critical Eye", "Crit Chance +10%", 200, lambda p: p.modify_stat("crit_chance", 1.5)),
-            ],
-            "LEGENDARY": [
-                ("God Slayer", "Damage +50%", 300, lambda p: p.modify_stat("damage", 1.5)),
-                ("Sonic Boots", "Speed +50%", 300, lambda p: p.modify_stat("move_speed", 1.5)),
-                ("Holy Armor", "Defense +50%", 300, lambda p: p.modify_stat("defense", 1.5)),
-                ("Death's Eye", "Crit Damage +50%", 300, lambda p: p.modify_stat("crit_damage", 1.5)),
-            ]
-        }
-        
-        # Select random item from appropriate pool
-        name, desc, cost, effect = random.choice(items[selected_rarity])
-        return Item(name, desc, cost, selected_rarity, effect)
-        
+            # Calculate total weight
+            total_weight = sum(ITEM_RARITY[item.rarity.name] for item in available_items)
+            roll = random.random() * total_weight
+            
+            # Select item based on weight
+            current_weight = 0
+            selected_item = None
+            
+            for item in available_items:
+                current_weight += ITEM_RARITY[item.rarity.name]
+                if roll <= current_weight:
+                    selected_item = item
+                    break
+            
+            if selected_item:
+                self.items.append(selected_item)
+                available_items.remove(selected_item)
+            
     def purchase_selected_item(self, player):
         """Attempt to purchase the selected item"""
         if not self.selected_item:
@@ -101,12 +72,12 @@ class Shop:
             
         if player.money >= self.selected_item.cost:
             player.money -= self.selected_item.cost
-            self.selected_item.effect(player)
+            player.equip_item(self.selected_item)  # Use new equip system
             self.items.remove(self.selected_item)
             self.selected_item = None
             return True
             
-        return False 
+        return False
         
     def draw(self, screen):
         # Draw semi-transparent background
@@ -157,9 +128,14 @@ class Shop:
             pygame.draw.rect(screen, self.BORDER_COLOR, item_rect, 2)
             
             # Draw item name with rarity color
-            name_color = ITEM_RARITY_COLORS.get(item.rarity, WHITE)
+            name_color = ITEM_RARITY_COLORS.get(item.rarity.name, WHITE)
             name_text = self.item_font.render(item.name, True, name_color)
             screen.blit(name_text, (item_x + 10, item_y + 10))
+            
+            # Draw item type indicator
+            type_text = self.desc_font.render(f"[{item.item_type.name}]", True, WHITE)
+            type_rect = type_text.get_rect(left=item_x + name_text.get_width() + 20, top=item_y + 13)
+            screen.blit(type_text, type_rect)
             
             # Draw item cost
             cost_text = self.item_font.render(f"${item.cost}", True, GOLD)
