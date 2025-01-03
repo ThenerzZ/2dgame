@@ -3,6 +3,7 @@ import math
 import random
 from game.settings import *
 from items.inventory import Inventory
+from graphics.animation_handler import AnimationHandler
 
 class Player:
     def __init__(self, character_sprite=None):
@@ -13,6 +14,12 @@ class Player:
         self.speed = PLAYER_SPEED
         self.direction = pygame.math.Vector2()
         self.facing_left = False
+        
+        # Animation system
+        if self.sprite:
+            self.animator = AnimationHandler(self.sprite)
+        else:
+            self.animator = None
         
         # New attributes for items and stats
         self.inventory = Inventory()
@@ -57,6 +64,15 @@ class Player:
         # Normalize diagonal movement
         if self.direction.magnitude() > 0:
             self.direction = self.direction.normalize()
+            
+        # Update animation state based on movement
+        if self.animator:
+            if self.is_attacking:
+                self.animator.set_animation('attack')
+            elif self.direction.magnitude() > 0:
+                self.animator.set_animation('walk')
+            else:
+                self.animator.set_animation('idle')
 
     def move(self):
         # Update position using modified speed
@@ -80,11 +96,16 @@ class Player:
             self.attack_animation_timer -= 1
         else:
             self.is_attacking = False
+            
+        # Update animation frames
+        if self.animator:
+            self.animator.update()
         
     def draw(self, screen):
-        # Draw character sprite or fallback to rectangle
-        if self.sprite:
-            sprite = pygame.transform.flip(self.sprite, self.facing_left, False)
+        # Draw character sprite with animations or fallback to rectangle
+        if self.animator:
+            current_frame = self.animator.get_current_frame()
+            sprite = pygame.transform.flip(current_frame, self.facing_left, False)
             screen.blit(sprite, self.rect)
         else:
             pygame.draw.rect(screen, self.color, self.rect)
@@ -103,7 +124,7 @@ class Player:
         screen.blit(range_surface, (0, 0))
         
         self.draw_health_bar(screen)
-        
+
     def draw_health_bar(self, screen):
         bar_width = 50
         bar_height = 5
@@ -132,7 +153,7 @@ class Player:
         actual_damage = max(1, amount * defense_multiplier)
         self.health = max(0, self.health - actual_damage)
         return self.health <= 0
-        
+
     def heal(self, amount):
         """Heal the player"""
         self.health = min(self.max_health, self.health + amount)
