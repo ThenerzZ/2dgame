@@ -34,52 +34,52 @@ class TerrainGenerator:
                 'particle_count': 0,
                 'wind_strength': 0.5,
                 'ambient_darkness': 0,
-                'weight': 15  # Higher weight for clear weather
+                'weight': 15
             },
             'light_rain': {
-                'fog_density': 20,
-                'particle_count': 50,
-                'wind_strength': 1.0,
-                'ambient_darkness': 20,
-                'weight': 20  # Common weather
+                'fog_density': 30,
+                'particle_count': 100,
+                'wind_strength': 1.2,
+                'ambient_darkness': 30,
+                'weight': 20
             },
             'heavy_rain': {
-                'fog_density': 40,
-                'particle_count': 100,
-                'wind_strength': 2.0,
-                'ambient_darkness': 40,
+                'fog_density': 60,
+                'particle_count': 200,
+                'wind_strength': 2.5,
+                'ambient_darkness': 60,
                 'weight': 15
             },
             'blood_rain': {
-                'fog_density': 30,
-                'particle_count': 80,
-                'wind_strength': 1.5,
-                'ambient_darkness': 50,
+                'fog_density': 45,
+                'particle_count': 150,
+                'wind_strength': 2.0,
+                'ambient_darkness': 70,
                 'particle_color': 'blood',
-                'weight': 5  # Rare weather
+                'weight': 5
             },
             'ash_storm': {
-                'fog_density': 60,
-                'particle_count': 120,
-                'wind_strength': 2.5,
-                'ambient_darkness': 60,
+                'fog_density': 80,
+                'particle_count': 250,
+                'wind_strength': 3.0,
+                'ambient_darkness': 80,
                 'particle_color': 'ash',
                 'weight': 10
             },
             'snow': {
-                'fog_density': 30,
-                'particle_count': 70,
-                'wind_strength': 0.8,
-                'ambient_darkness': 10,
+                'fog_density': 40,
+                'particle_count': 150,
+                'wind_strength': 1.0,
+                'ambient_darkness': 20,
                 'particle_color': 'snow',
                 'weight': 15
             },
             'heavy_fog': {
-                'fog_density': 80,
+                'fog_density': 100,
                 'particle_count': 0,
-                'wind_strength': 0.3,
-                'ambient_darkness': 30,
-                'weight': 20  # Common weather
+                'wind_strength': 0.4,
+                'ambient_darkness': 50,
+                'weight': 20
             }
         }
         
@@ -134,22 +134,67 @@ class TerrainGenerator:
         # Initialize particles based on weather type
         particle_color = weather.get('particle_color', 'water')
         for _ in range(weather['particle_count']):
-            self.weather_effects['particles'].append({
-                'x': random.randint(0, SCREEN_WIDTH),
-                'y': random.randint(-50, SCREEN_HEIGHT),
-                'speed': random.uniform(10, 15),
-                'size': random.randint(2, 4),
-                'color': random.choice(self.colors[particle_color])
-            })
+            if self.current_weather == 'snow':
+                # Larger snowflakes
+                self.weather_effects['particles'].append({
+                    'x': random.randint(0, SCREEN_WIDTH),
+                    'y': random.randint(-50, SCREEN_HEIGHT),
+                    'speed': random.uniform(2, 4),
+                    'size': random.randint(3, 6),
+                    'rotation': random.uniform(0, 360),
+                    'rot_speed': random.uniform(-2, 2),
+                    'sway': random.uniform(0, 2*math.pi),
+                    'sway_speed': random.uniform(0.02, 0.04),
+                    'color': random.choice(self.colors[particle_color]),
+                    'points': random.randint(6, 8)
+                })
+            elif self.current_weather == 'ash_storm':
+                # More visible ash and embers
+                self.weather_effects['particles'].append({
+                    'x': random.randint(0, SCREEN_WIDTH),
+                    'y': random.randint(-50, SCREEN_HEIGHT),
+                    'speed': random.uniform(3, 8),
+                    'size': random.randint(2, 4),
+                    'color': random.choice(self.colors[particle_color]),
+                    'glow': random.random() < 0.3,
+                    'glow_strength': random.uniform(0.7, 1.0),
+                    'fade_speed': random.uniform(0.005, 0.015)
+                })
+            elif self.current_weather == 'blood_rain':
+                # More dramatic blood rain
+                self.weather_effects['particles'].append({
+                    'x': random.randint(0, SCREEN_WIDTH),
+                    'y': random.randint(-50, SCREEN_HEIGHT),
+                    'speed': random.uniform(15, 20),
+                    'size': random.randint(3, 5),
+                    'color': random.choice(self.colors[particle_color]),
+                    'trail': [],
+                    'splatter': False,
+                    'splatter_time': 0
+                })
+            else:
+                # Enhanced rain particles
+                self.weather_effects['particles'].append({
+                    'x': random.randint(0, SCREEN_WIDTH),
+                    'y': random.randint(-50, SCREEN_HEIGHT),
+                    'speed': random.uniform(20, 25),
+                    'size': random.randint(2, 4),
+                    'color': random.choice(self.colors[particle_color]),
+                    'streak_length': random.randint(8, 12),
+                    'ripple': False,
+                    'ripple_size': 0
+                })
             
-        # Initialize fog particles
+        # Initialize enhanced fog particles
         for _ in range(weather['fog_density']):
             self.weather_effects['fog_particles'].append({
                 'x': random.randint(0, SCREEN_WIDTH),
                 'y': random.randint(0, SCREEN_HEIGHT),
-                'size': random.randint(30, 60),
-                'speed': random.uniform(0.2, 0.5),
-                'alpha': random.randint(5, 20)
+                'size': random.randint(60, 100),
+                'speed': random.uniform(0.3, 0.6),
+                'alpha': random.randint(10, 30),
+                'pulse': random.uniform(0, 2*math.pi),
+                'pulse_speed': random.uniform(0.02, 0.04)
             })
             
         # Update wind properties
@@ -167,19 +212,49 @@ class TerrainGenerator:
         
         weather = self.weather_types[self.current_weather]
         
-        # Update particles
+        # Update particles based on weather type
         for particle in self.weather_effects['particles']:
-            particle['y'] += particle['speed']
-            particle['x'] += self.wind_direction * self.wind_strength
+            if self.current_weather == 'snow':
+                # Update snowflake movement
+                particle['y'] += particle['speed']
+                particle['x'] += math.sin(particle['sway']) * 0.5 + self.wind_direction * self.wind_strength
+                particle['rotation'] += particle['rot_speed']
+                particle['sway'] += particle['sway_speed']
+            elif self.current_weather == 'ash_storm':
+                # Update ash particle movement
+                particle['y'] += particle['speed']
+                particle['x'] += self.wind_direction * self.wind_strength * 2
+                if particle['glow']:
+                    particle['glow_strength'] = max(0, particle['glow_strength'] - particle['fade_speed'])
+            elif self.current_weather == 'blood_rain':
+                # Update blood rain movement and trails
+                old_x, old_y = particle['x'], particle['y']
+                particle['y'] += particle['speed']
+                particle['x'] += self.wind_direction * self.wind_strength
+                particle['trail'].append((old_x, old_y))
+                if len(particle['trail']) > 3:
+                    particle['trail'].pop(0)
+                
+                if particle['splatter']:
+                    particle['splatter_time'] += 1
+            else:
+                # Update rain movement
+                particle['y'] += particle['speed']
+                particle['x'] += self.wind_direction * self.wind_strength
+                if particle['ripple']:
+                    particle['ripple_size'] += 0.5
             
             # Reset particles that go off screen
             if particle['y'] > SCREEN_HEIGHT:
                 particle['y'] = random.randint(-50, -10)
                 particle['x'] = random.randint(0, SCREEN_WIDTH)
-                
-                # Create puddle effects for rain-type weather
-                if self.current_weather in ['light_rain', 'heavy_rain', 'blood_rain']:
-                    self._create_ripple(particle['x'], SCREEN_HEIGHT)
+                if self.current_weather == 'blood_rain':
+                    particle['trail'].clear()
+                    particle['splatter'] = True
+                    particle['splatter_time'] = 0
+                elif 'ripple' in particle:
+                    particle['ripple'] = True
+                    particle['ripple_size'] = 0
             
             # Wrap particles horizontally
             if particle['x'] > SCREEN_WIDTH:
@@ -187,9 +262,12 @@ class TerrainGenerator:
             elif particle['x'] < 0:
                 particle['x'] = SCREEN_WIDTH
                 
-        # Update fog particles
+        # Update fog particles with pulsing effect
         for particle in self.weather_effects['fog_particles']:
             particle['x'] += particle['speed'] * self.wind_direction
+            particle['pulse'] += particle['pulse_speed']
+            particle['alpha'] = particle['alpha'] * 0.8 + (particle['alpha'] * math.sin(particle['pulse']) * 0.2)
+            
             if particle['x'] > SCREEN_WIDTH:
                 particle['x'] = -particle['size']
             elif particle['x'] < -particle['size']:
@@ -220,44 +298,103 @@ class TerrainGenerator:
         """Draw weather effects based on current weather type"""
         weather = self.weather_types[self.current_weather]
         
-        # Draw fog layer
+        # Draw enhanced fog layer with pulsing effect
         if weather['fog_density'] > 0:
             fog_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
             for particle in self.weather_effects['fog_particles']:
                 fog_color = (*random.choice(self.colors['fog'])[:3], 
-                           particle['alpha'] * (weather['fog_density'] / 80))
+                           int(particle['alpha'] * (weather['fog_density'] / 60)))
                 pygame.draw.circle(fog_surface, fog_color,
                                 (int(particle['x']), int(particle['y'])),
-                                particle['size'])
+                                int(particle['size'] * (0.8 + 0.2 * math.sin(particle['pulse']))))
             screen.blit(fog_surface, (0, 0))
         
-        # Draw weather particles
+        # Draw weather particles with enhanced effects
         if weather['particle_count'] > 0:
             particle_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
             for particle in self.weather_effects['particles']:
                 if self.current_weather == 'snow':
-                    # Draw snowflakes
-                    pygame.draw.circle(particle_surface, particle['color'],
-                                    (int(particle['x']), int(particle['y'])),
-                                    particle['size'])
+                    # Draw more detailed snowflake
+                    center = (int(particle['x']), int(particle['y']))
+                    points = []
+                    for i in range(particle['points']):
+                        angle = math.radians(particle['rotation'] + (360 / particle['points']) * i)
+                        point_x = center[0] + math.cos(angle) * particle['size']
+                        point_y = center[1] + math.sin(angle) * particle['size']
+                        points.append((point_x, point_y))
+                        
+                        # Add more crystalline details
+                        for detail_angle in [45, -45, 30, -30]:
+                            detail_rad = math.radians(detail_angle)
+                            detail_x = center[0] + math.cos(angle + detail_rad) * particle['size'] * 0.7
+                            detail_y = center[1] + math.sin(angle + detail_rad) * particle['size'] * 0.7
+                            points.append((detail_x, detail_y))
+                            
+                    if len(points) >= 3:
+                        pygame.draw.polygon(particle_surface, particle['color'], points, 2)
+                        
                 elif self.current_weather == 'ash_storm':
-                    # Draw ash particles
+                    # Draw more visible ash particles with stronger glow
+                    if particle['glow'] and particle['glow_strength'] > 0:
+                        # Enhanced glow
+                        glow_size = particle['size'] * 3
+                        glow_alpha = int(100 * particle['glow_strength'])
+                        glow_color = (*self.colors['ember'][0], glow_alpha)
+                        pygame.draw.circle(particle_surface, glow_color,
+                                        (int(particle['x']), int(particle['y'])),
+                                        glow_size)
+                    # Draw ash particle
                     pygame.draw.rect(particle_surface, particle['color'],
                                    (int(particle['x']), int(particle['y']),
                                     particle['size'], particle['size']))
+                    
+                elif self.current_weather == 'blood_rain':
+                    # Draw more dramatic blood rain
+                    if len(particle['trail']) >= 2:
+                        # Longer, more visible trails
+                        points = [(particle['x'], particle['y'])] + particle['trail']
+                        pygame.draw.lines(particle_surface, 
+                                        (*particle['color'], 150),
+                                        False, points, 3)
+                    
+                    # Larger blood drops
+                    pygame.draw.circle(particle_surface, particle['color'],
+                                     (int(particle['x']), int(particle['y'])),
+                                     particle['size'])
+                    
+                    # More dramatic splatter
+                    if particle['splatter'] and particle['splatter_time'] < 10:
+                        for _ in range(5):
+                            angle = random.uniform(0, 2*math.pi)
+                            dist = random.uniform(3, 8)
+                            splat_x = particle['x'] + math.cos(angle) * dist
+                            splat_y = particle['y'] + math.sin(angle) * dist
+                            pygame.draw.circle(particle_surface, particle['color'],
+                                            (int(splat_x), int(splat_y)),
+                                            2)
                 else:
-                    # Draw rain/blood rain drops
-                    end_x = particle['x'] + self.wind_direction * particle['size']
+                    # Draw enhanced rain drops with longer streaks
+                    end_x = particle['x'] + self.wind_direction * particle['streak_length']
                     pygame.draw.line(particle_surface, particle['color'],
                                    (particle['x'], particle['y']),
-                                   (end_x, particle['y'] + particle['size'] * 2))
+                                   (end_x, particle['y'] + particle['streak_length']), 3)
+                    
+                    # More visible ripple effect
+                    if particle['ripple'] and particle['ripple_size'] < 15:
+                        ripple_alpha = int(max(0, 255 - particle['ripple_size'] * 20))
+                        pygame.draw.circle(particle_surface, 
+                                         (*particle['color'][:3], ripple_alpha),
+                                         (int(particle['x']), SCREEN_HEIGHT),
+                                         int(particle['ripple_size']), 2)
             
             screen.blit(particle_surface, (0, 0))
         
-        # Apply ambient darkness
+        # Apply ambient darkness with more dramatic variation
         if weather['ambient_darkness'] > 0:
             darkness = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-            darkness.fill((0, 0, 0, weather['ambient_darkness']))
+            base_alpha = weather['ambient_darkness']
+            flicker = random.randint(-10, 10)
+            darkness.fill((0, 0, 0, max(0, min(255, base_alpha + flicker))))
             screen.blit(darkness, (0, 0))
 
     def _create_ripple(self, x, y):
