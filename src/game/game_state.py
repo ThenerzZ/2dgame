@@ -39,25 +39,29 @@ class GameState:
         
         # Bonfire system
         self.bonfire_cooldowns = {pos: 0 for pos in self.terrain_gen.bonfire_positions}
+        
+        # Difficulty tracking
+        self.spawn_timer = 0
+        self.current_spawn_delay = ENEMY_SPAWN_DELAY
 
     def start_new_round(self):
-        """Initialize a new round"""
+        """Initialize a new round with progressive difficulty"""
         self.round_timer = ROUND_DURATION
         self.enemies.clear()
         self.items_bought_this_round = 0
         
-        # Scale enemy stats based on round number
-        scaling = 1 + (self.current_round - 1) * ENEMY_SCALING_PER_ROUND
+        # Calculate round completion reward
+        round_reward = int(BASE_ROUND_REWARD * (1 + REWARD_SCALING * (self.current_round - 1)))
+        self.player.add_money(round_reward)
+        
+        # Update spawn mechanics for new round
+        self.current_spawn_delay = max(FPS, ENEMY_SPAWN_DELAY * (SPAWN_RATE_DECREASE ** (self.current_round - 1)))
+        self.spawn_timer = 0
         
         # Spawn initial enemies
-        num_enemies = STARTING_ENEMIES + self.current_round - 1
+        num_enemies = min(MAX_ENEMIES, STARTING_ENEMIES + (self.current_round - 1) * ENEMY_COUNT_INCREASE)
         for _ in range(num_enemies):
-            enemy = Enemy()
-            # Scale enemy stats
-            enemy.health *= scaling
-            enemy.max_health *= scaling
-            enemy.damage *= scaling
-            self.enemies.append(enemy)
+            self.spawn_enemy()
             
         self.state = GameStates.PLAYING
 
@@ -107,6 +111,13 @@ class GameState:
             if len(self.enemies) < STARTING_ENEMIES + self.current_round - 1:
                 self.spawn_enemy()
                 
+            # Progressive enemy spawning
+            self.spawn_timer += 1
+            if self.spawn_timer >= self.current_spawn_delay:
+                self.spawn_timer = 0
+                if len(self.enemies) < min(MAX_ENEMIES, STARTING_ENEMIES + (self.current_round - 1) * ENEMY_COUNT_INCREASE):
+                    self.spawn_enemy()
+                    
         elif self.state == GameStates.SHOPPING:
             # Update shop timer
             self.shop_timer -= 1
@@ -189,13 +200,62 @@ class GameState:
         health_text = font.render(f'Health: {int(self.player.health)}/{int(self.player.max_health)}', True, GREEN)
         screen.blit(health_text, (SCREEN_WIDTH - 200, 50))
 
+    def get_enemy_weights(self):
+        """Get the spawn weights for the current round"""
+        current_weights = None
+        for round_num, weights in ENEMY_SPAWN_WEIGHTS:
+            if self.current_round >= round_num:
+                current_weights = weights
+            else:
+                break
+        return current_weights or ENEMY_SPAWN_WEIGHTS[0][1]
+
     def spawn_enemy(self):
-        """Spawn a new enemy with scaled stats"""
+        """Spawn a new enemy with tier-based stats and progressive scaling"""
+        if len(self.enemies) >= MAX_ENEMIES:
+            return
+            
+        # Get spawn weights for current round
+        weights = self.get_enemy_weights()
+        
+        # Select enemy tier based on weights
+        total_weight = sum(weights.values())
+        roll = random.uniform(0, total_weight)
+        current_weight = 0
+        selected_tier = None
+        
+        for tier, weight in weights.items():
+            current_weight += weight
+            if roll <= current_weight:
+                selected_tier = tier
+                break
+        
+        # Create enemy with tier stats
         enemy = Enemy()
-        scaling = 1 + (self.current_round - 1) * ENEMY_SCALING_PER_ROUND
-        enemy.health *= scaling
-        enemy.max_health *= scaling
-        enemy.damage *= scaling
+        tier_stats = ENEMY_TIERS[selected_tier]
+        
+        # Set base stats from tier
+        enemy.health = tier_stats["health"]
+        enemy.max_health = tier_stats["health"]
+        enemy.damage = tier_stats["damage"]
+        enemy.speed = tier_stats["speed"]
+        enemy.kill_reward = tier_stats["reward"]
+        enemy.tier = selected_tier
+        
+        # Set monster type and sprite based on tier
+        enemy.set_monster_type(selected_tier)
+        
+        # Apply round scaling
+        round_factor = self.current_round - 1
+        health_scale = 1 + (HEALTH_SCALING * round_factor)
+        damage_scale = 1 + (DAMAGE_SCALING * round_factor)
+        speed_scale = 1 + (SPEED_SCALING * round_factor)
+        
+        enemy.health *= health_scale
+        enemy.max_health *= health_scale
+        enemy.damage *= damage_scale
+        enemy.speed *= speed_scale
+        
         self.enemies.append(enemy)
 
     def update_enemies(self):
