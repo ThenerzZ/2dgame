@@ -176,3 +176,22 @@ class GameStates:
     SHOPPING = "shopping"
     ROUND_TRANSITION = "round_transition"
     GAME_OVER = "game_over" 
+
+# UI Colors
+ITEM_RARITY_COLORS = {
+    "COMMON": (200, 200, 200),    # Light gray
+    "RARE": (30, 144, 255),       # Dodger blue
+    "EPIC": (147, 112, 219),      # Medium purple
+    "LEGENDARY": (255, 140, 0)     # Dark orange
+}
+
+# UI Settings
+UI_PANEL_COLOR = (40, 44, 52)
+UI_ELEMENT_COLOR = (50, 55, 65)
+UI_HOVER_COLOR = (60, 65, 75)
+UI_SELECTED_COLOR = (70, 75, 85)
+UI_BORDER_COLOR = (80, 85, 95)
+UI_TEXT_COLOR = (220, 220, 220)
+UI_TITLE_SIZE = 48
+UI_TEXT_SIZE = 32
+UI_SMALL_TEXT_SIZE = 24 

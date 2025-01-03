@@ -1,13 +1,14 @@
 import pygame
-from entities.player import Player
-from entities.enemy import Enemy
-from shop.shop import Shop
-from ui.start_menu import StartMenu
-from graphics.terrain_generator import TerrainGenerator
-from graphics.character_generator import CharacterGenerator
-from game.settings import *
 import random
 import math
+from game.settings import *
+from entities.player import Player
+from entities.enemy import Enemy
+from graphics.terrain_generator import TerrainGenerator
+from graphics.character_generator import CharacterGenerator
+from ui.shop import Shop
+from ui.start_menu import StartMenu
+from ui.hud import HUD
 
 class GameState:
     def __init__(self):
@@ -25,8 +26,12 @@ class GameState:
         # Create player with generated character sprite
         self.player = Player(character_sprite=self.char_gen.generate_character())
         self.enemies = []
+        
+        # Initialize UI elements
         self.shop = Shop()
+        self.shop.set_player(self.player)  # Set player reference for shop
         self.start_menu = StartMenu(self.shop, self.player)
+        self.hud = HUD()  # Initialize HUD
         
         # Game state
         self.state = GameStates.MENU
@@ -164,18 +169,11 @@ class GameState:
             self.terrain_gen.draw_particles(screen)
             
             # Draw HUD
-            self.draw_hud(screen)
+            self.hud.draw(screen, self.player, self.score, self.current_round, self.round_timer)
             
         elif self.state == GameStates.SHOPPING:
             # Draw shop interface
             self.shop.draw(screen)
-            
-            # Draw shop timer
-            font = pygame.font.Font(None, 36)
-            timer_text = font.render(f'Shop Time: {self.shop_timer // FPS}s', True, WHITE)
-            items_text = font.render(f'Items Left: {ITEMS_PER_ROUND - self.items_bought_this_round}', True, WHITE)
-            screen.blit(timer_text, (10, 10))
-            screen.blit(items_text, (10, 50))
             
         elif self.state == GameStates.GAME_OVER:
             self.draw_game_over(screen)
