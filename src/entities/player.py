@@ -23,6 +23,7 @@ class Player:
         self.equipment_sprites = EquipmentSprites(PLAYER_SIZE)
         self.weapons = []  # List of equipped weapons (max 4)
         self.weapon_sprites = []  # List of weapon sprites
+        self.weapon_animations = []  # List of weapon animations
         self.current_weapon_index = 0
         self.armor_overlays = []  # List of armor visual effects
         
@@ -31,7 +32,7 @@ class Player:
             self.animator = AnimationHandler(self.sprite)
         else:
             self.animator = None
-        
+            
         # Weapon state
         self.weapon_offset_x = 20
         self.weapon_offset_y = 0
@@ -68,6 +69,9 @@ class Player:
             if len(self.weapons) < 4:  # Maximum 4 weapons
                 self.weapons.append(item)
                 self.weapon_sprites.append(self.equipment_sprites.generate_weapon_sprite(item.name))
+                # Get animation for this weapon
+                animation = self.equipment_sprites.get_animation(item.name)
+                self.weapon_animations.append(animation)
                 self.weapon_cooldowns.append(0)
                 # Apply weapon stats
                 item.apply_effect(self)
@@ -90,6 +94,7 @@ class Player:
                 index = self.weapons.index(item)
                 self.weapons.pop(index)
                 self.weapon_sprites.pop(index)
+                self.weapon_animations.pop(index)
                 self.weapon_cooldowns.pop(index)
                 if self.current_weapon_index >= len(self.weapons):
                     self.current_weapon_index = max(0, len(self.weapons) - 1)
@@ -145,10 +150,12 @@ class Player:
         self.input()
         self.move()
         
-        # Update weapon cooldowns
+        # Update weapon cooldowns and animations
         for i in range(len(self.weapon_cooldowns)):
             if self.weapon_cooldowns[i] > 0:
                 self.weapon_cooldowns[i] -= 1
+            if i < len(self.weapon_animations) and self.weapon_animations[i]:
+                self.weapon_animations[i].update()
         
         # Update animations
         if self.animator:
@@ -185,7 +192,7 @@ class Player:
                 overlay_flipped = pygame.transform.flip(overlay, self.facing_left, False)
                 screen.blit(overlay_flipped, self.rect)
             
-            # Draw all equipped weapons
+            # Draw all equipped weapons with animations
             for i, weapon_sprite in enumerate(self.weapon_sprites):
                 if weapon_sprite:
                     # Calculate offset based on weapon index
@@ -196,12 +203,14 @@ class Player:
                     weapon_x = self.rect.centerx + math.cos(math.radians(weapon_angle)) * self.weapon_offset_x
                     weapon_y = self.rect.centery + math.sin(math.radians(weapon_angle)) * self.weapon_offset_y
                     
-                    # Rotate weapon
-                    rotated_weapon = pygame.transform.rotate(weapon_sprite, -weapon_angle)
-                    weapon_rect = rotated_weapon.get_rect(center=(weapon_x, weapon_y))
-                    
-                    # Draw weapon
-                    screen.blit(rotated_weapon, weapon_rect)
+                    # Draw weapon animation if it exists
+                    if i < len(self.weapon_animations) and self.weapon_animations[i]:
+                        self.weapon_animations[i].draw(screen, weapon_x, weapon_y, weapon_angle)
+                    else:
+                        # Fallback to static sprite
+                        rotated_weapon = pygame.transform.rotate(weapon_sprite, -weapon_angle)
+                        weapon_rect = rotated_weapon.get_rect(center=(weapon_x, weapon_y))
+                        screen.blit(rotated_weapon, weapon_rect)
                     
                     # Draw attack effects if attacking and cooldown is active
                     if self.is_attacking and self.weapon_cooldowns[i] > 0:
@@ -360,6 +369,9 @@ class Player:
             if self.weapon_cooldowns[i] <= 0:
                 self.weapon_cooldowns[i] = weapon.weapon_stats.get("cooldown", 1.0) * FPS
                 self.is_attacking = True
+                # Start weapon animation
+                if self.weapon_animations[i]:
+                    self.weapon_animations[i].play()
                 # Calculate damage
                 damage = self.calculate_damage() * weapon.stats.get("damage", 1.0)
                 # Find closest enemy and apply damage
