@@ -3,7 +3,7 @@ import random
 from game.settings import *
 
 class Enemy:
-    def __init__(self):
+    def __init__(self, character_sprite=None):
         # Spawn enemy at random edge of the screen
         side = random.randint(0, 3)
         if side == 0:  # Top
@@ -20,8 +20,10 @@ class Enemy:
             y = random.randint(0, SCREEN_HEIGHT)
 
         self.rect = pygame.Rect(x, y, PLAYER_SIZE, PLAYER_SIZE)
-        self.color = RED
+        self.sprite = character_sprite
+        self.color = RED  # Fallback if no sprite
         self.speed = ENEMY_BASE_STATS["speed"]
+        self.facing_left = False
         
         # Health and damage
         self.max_health = ENEMY_BASE_STATS["health"]
@@ -37,6 +39,9 @@ class Enemy:
         dx = player_pos[0] - self.rect.centerx
         dy = player_pos[1] - self.rect.centery
         
+        # Update facing direction
+        self.facing_left = dx < 0
+        
         # Normalize direction
         distance = (dx ** 2 + dy ** 2) ** 0.5
         if distance != 0:
@@ -50,8 +55,12 @@ class Enemy:
         if self.is_dead:
             return
             
-        # Draw enemy
-        pygame.draw.rect(screen, self.color, self.rect)
+        # Draw character sprite or fallback to rectangle
+        if self.sprite:
+            sprite = pygame.transform.flip(self.sprite, self.facing_left, False)
+            screen.blit(sprite, self.rect)
+        else:
+            pygame.draw.rect(screen, self.color, self.rect)
         
         # Draw health bar
         bar_width = 40

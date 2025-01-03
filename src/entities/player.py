@@ -5,16 +5,18 @@ from game.settings import *
 from items.inventory import Inventory
 
 class Player:
-    def __init__(self):
+    def __init__(self, character_sprite=None):
         self.rect = pygame.Rect(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, 
                               PLAYER_SIZE, PLAYER_SIZE)
-        self.color = GREEN
+        self.sprite = character_sprite
+        self.color = GREEN  # Fallback if no sprite
         self.speed = PLAYER_SPEED
         self.direction = pygame.math.Vector2()
+        self.facing_left = False
         
         # New attributes for items and stats
         self.inventory = Inventory()
-        self.inventory.set_player(self)  # Set player reference
+        self.inventory.set_player(self)
         self.money = PLAYER_START_MONEY
         self.health = PLAYER_START_HEALTH
         self.max_health = PLAYER_START_HEALTH
@@ -32,7 +34,7 @@ class Player:
         # Attack animation
         self.is_attacking = False
         self.attack_animation_timer = 0
-        self.attack_animation_duration = 5  # Reduced animation duration for faster attacks
+        self.attack_animation_duration = 5
 
     def input(self):
         keys = pygame.key.get_pressed()
@@ -41,8 +43,10 @@ class Player:
         self.direction.x = 0
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self.direction.x = -1
+            self.facing_left = True
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             self.direction.x = 1
+            self.facing_left = False
             
         self.direction.y = 0
         if keys[pygame.K_UP] or keys[pygame.K_w]:
@@ -78,8 +82,12 @@ class Player:
             self.is_attacking = False
         
     def draw(self, screen):
-        # Draw player
-        pygame.draw.rect(screen, self.color, self.rect)
+        # Draw character sprite or fallback to rectangle
+        if self.sprite:
+            sprite = pygame.transform.flip(self.sprite, self.facing_left, False)
+            screen.blit(sprite, self.rect)
+        else:
+            pygame.draw.rect(screen, self.color, self.rect)
         
         # Draw attack range indicator (semi-transparent circle)
         range_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
