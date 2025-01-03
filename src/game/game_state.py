@@ -72,6 +72,8 @@ class GameState:
                 self.round_started = True
                 self.spawn_initial_enemies()
         elif not self.game_over:
+            # Pass enemies list to player for targeting
+            self.player.current_enemies = self.enemies
             self.player.update()
             
             # Update enemies and handle combat

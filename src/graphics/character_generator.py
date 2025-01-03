@@ -150,41 +150,52 @@ class CharacterGenerator:
                         (helmet_x + helmet_size, visor_y), 1)
                         
     def _generate_weapon(self, surface):
-        """Generate knight weapons"""
+        """Generate a handgun"""
         metal_color = random.choice(self.colors['metal'])
         trim_color = random.choice(self.colors['trim'])
         
-        weapon_type = random.choice(['sword', 'greatsword'])
-        weapon_x = 3 * self.size // 4
-        weapon_y = self.size // 3
+        # Base position for the gun
+        gun_x = 3 * self.size // 4
+        gun_y = self.size // 2
         
-        if weapon_type == 'sword':
-            # Blade
-            pygame.draw.line(surface, metal_color,
-                           (weapon_x, weapon_y),
-                           (weapon_x + self.size//8, weapon_y + self.size//3), 2)
-            # Handle
-            pygame.draw.line(surface, (40, 30, 20),  # Dark brown
-                           (weapon_x, weapon_y),
-                           (weapon_x - self.size//16, weapon_y - self.size//16))
-            # Crossguard
+        # Gun barrel
+        pygame.draw.line(surface, metal_color,
+                        (gun_x, gun_y),
+                        (gun_x + self.size//6, gun_y), 2)
+        
+        # Gun body
+        body_points = [
+            (gun_x, gun_y),  # Top of grip
+            (gun_x, gun_y + self.size//8),  # Bottom of grip
+            (gun_x - self.size//12, gun_y + self.size//8),  # Bottom back of grip
+            (gun_x - self.size//12, gun_y - self.size//16),  # Top back of grip
+        ]
+        pygame.draw.polygon(surface, metal_color, body_points)
+        
+        # Grip detail
+        pygame.draw.line(surface, trim_color,
+                        (gun_x - self.size//16, gun_y + self.size//16),
+                        (gun_x - self.size//16, gun_y + self.size//8 - 1), 1)
+        
+        # Hammer
+        pygame.draw.line(surface, metal_color,
+                        (gun_x - self.size//16, gun_y - self.size//16),
+                        (gun_x - self.size//32, gun_y - self.size//12), 1)
+        
+        # Trigger
+        pygame.draw.line(surface, metal_color,
+                        (gun_x - self.size//24, gun_y + self.size//16),
+                        (gun_x - self.size//16, gun_y + self.size//12), 1)
+        
+        # Optional revolver cylinder
+        if random.random() < 0.5:  # 50% chance for revolver
+            pygame.draw.circle(surface, metal_color,
+                             (gun_x - self.size//32, gun_y), 2)
+            # Cylinder detail
             pygame.draw.line(surface, trim_color,
-                           (weapon_x - 3, weapon_y),
-                           (weapon_x + 3, weapon_y), 2)
-        else:  # greatsword
-            # Larger blade
-            pygame.draw.line(surface, metal_color,
-                           (weapon_x, weapon_y - self.size//6),
-                           (weapon_x + self.size//6, weapon_y + self.size//2), 3)
-            # Longer handle
-            pygame.draw.line(surface, (40, 30, 20),  # Dark brown
-                           (weapon_x, weapon_y - self.size//6),
-                           (weapon_x - self.size//12, weapon_y - self.size//4))
-            # Decorative crossguard
-            pygame.draw.line(surface, trim_color,
-                           (weapon_x - 4, weapon_y - self.size//6),
-                           (weapon_x + 4, weapon_y - self.size//6), 2)
-                        
+                           (gun_x - self.size//16, gun_y - 2),
+                           (gun_x - self.size//16, gun_y + 2), 1)
+        
     def _add_armor_details(self, surface, x, y, width, height, detail_color):
         """Add medieval armor details"""
         # Chest emblem

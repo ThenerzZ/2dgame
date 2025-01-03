@@ -4,6 +4,7 @@ import random
 from game.settings import *
 from items.inventory import Inventory
 from graphics.animation_handler import AnimationHandler
+from graphics.bullet_particles import BulletParticleSystem
 
 class Player:
     def __init__(self, character_sprite=None):
@@ -20,6 +21,9 @@ class Player:
             self.animator = AnimationHandler(self.sprite)
         else:
             self.animator = None
+        
+        # Bullet system
+        self.bullet_system = BulletParticleSystem()
         
         # New attributes for items and stats
         self.inventory = Inventory()
@@ -42,6 +46,10 @@ class Player:
         self.is_attacking = False
         self.attack_animation_timer = 0
         self.attack_animation_duration = 5
+        
+        # Gun position offset
+        self.gun_offset_x = 20  # Pixels from center
+        self.gun_offset_y = 0   # Pixels from center
 
     def input(self):
         keys = pygame.key.get_pressed()
@@ -100,6 +108,9 @@ class Player:
         # Update animation frames
         if self.animator:
             self.animator.update()
+            
+        # Update bullet system
+        self.bullet_system.update()
         
     def draw(self, screen):
         # Draw character sprite with animations or fallback to rectangle
@@ -109,6 +120,9 @@ class Player:
             screen.blit(sprite, self.rect)
         else:
             pygame.draw.rect(screen, self.color, self.rect)
+        
+        # Draw bullets and effects
+        self.bullet_system.draw(screen)
         
         # Draw attack range indicator (semi-transparent circle)
         range_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
@@ -124,7 +138,7 @@ class Player:
         screen.blit(range_surface, (0, 0))
         
         self.draw_health_bar(screen)
-
+        
     def draw_health_bar(self, screen):
         bar_width = 50
         bar_height = 5
@@ -163,12 +177,37 @@ class Player:
         self.money += amount
         
     def attack(self):
-        """Initiate an attack"""
+        """Shoot at the nearest enemy"""
         if self.attack_timer <= 0:
             self.attack_timer = 60 / self.get_stat("attack_speed")  # 60 frames per second
             self.is_attacking = True
             self.attack_animation_timer = self.attack_animation_duration
-            return self.calculate_damage()
+            
+            # Calculate gun position
+            gun_x = self.rect.centerx + (self.gun_offset_x if not self.facing_left else -self.gun_offset_x)
+            gun_y = self.rect.centery + self.gun_offset_y
+            
+            # Find closest enemy position
+            closest_enemy = None
+            min_distance = float('inf')
+            
+            for enemy in self.current_enemies:  # We'll need to pass this from game state
+                if self.can_attack_enemy(enemy):
+                    dx = enemy.rect.centerx - self.rect.centerx
+                    dy = enemy.rect.centery - self.rect.centery
+                    distance = math.sqrt(dx * dx + dy * dy)
+                    
+                    if distance < min_distance:
+                        min_distance = distance
+                        closest_enemy = enemy
+            
+            if closest_enemy:
+                # Create bullet effect
+                target_x = closest_enemy.rect.centerx
+                target_y = closest_enemy.rect.centery
+                self.bullet_system.shoot((gun_x, gun_y), (target_x, target_y))
+                return self.calculate_damage()
+                
         return 0
         
     def calculate_damage(self):
