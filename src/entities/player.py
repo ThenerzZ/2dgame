@@ -204,6 +204,12 @@ class Player:
         defense_multiplier = 1 - (self.get_stat("defense") / 100)
         actual_damage = max(1, amount * defense_multiplier)
         self.health = max(0, self.health - actual_damage)
+        
+        # Set hurt animation
+        if self.animator:
+            self.animator.set_animation('hurt')
+            
+        # Return True if player died
         return self.health <= 0
 
     def heal(self, amount):

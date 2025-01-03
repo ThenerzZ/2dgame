@@ -205,6 +205,14 @@ class GameState:
 
     def handle_combat(self):
         """Handle combat between player and enemies"""
+        # Check for enemy attacks
+        for enemy in self.enemies:
+            if self.player.rect.colliderect(enemy.rect):
+                if self.player.take_damage(enemy.damage):
+                    # Player died
+                    self.state = GameStates.GAME_OVER
+                    return
+
         # Find closest enemy in range for auto-attack
         closest_enemy = None
         min_distance = float('inf')
@@ -213,7 +221,7 @@ class GameState:
             if self.player.can_attack_enemy(enemy):
                 dx = enemy.rect.centerx - self.player.rect.centerx
                 dy = enemy.rect.centery - self.player.rect.centery
-                distance = (dx * dx + dy * dy) ** 0.5
+                distance = math.sqrt(dx * dx + dy * dy)
                 
                 if distance < min_distance:
                     min_distance = distance
@@ -226,12 +234,6 @@ class GameState:
                 if closest_enemy.take_damage(damage):
                     self.score += 1
                     self.player.add_money(ENEMY_KILL_REWARD)
-        
-        # Check for enemy attacks
-        for enemy in self.enemies:
-            if self.player.rect.colliderect(enemy.rect):
-                if self.player.take_damage(enemy.damage):
-                    self.game_over = True
 
     def check_bonfire_healing(self):
         """Check if player is near a bonfire and apply healing"""
@@ -269,17 +271,28 @@ class GameState:
         # Semi-transparent overlay
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         overlay.fill((0, 0, 0))
-        overlay.set_alpha(128)
+        overlay.set_alpha(180)  # More opaque
         screen.blit(overlay, (0, 0))
         
         # Game over text
         font = pygame.font.Font(None, 72)
         game_over_text = font.render('Game Over!', True, RED)
-        text_rect = game_over_text.get_rect(center=(SCREEN_WIDTH/2, SCREEN_HEIGHT/2))
+        text_rect = game_over_text.get_rect(center=(SCREEN_WIDTH/2, SCREEN_HEIGHT/2 - 50))
         screen.blit(game_over_text, text_rect)
         
-        # Score text
+        # Score and round info
         score_font = pygame.font.Font(None, 48)
         score_text = score_font.render(f'Final Score: {self.score}', True, WHITE)
-        score_rect = score_text.get_rect(center=(SCREEN_WIDTH/2, SCREEN_HEIGHT/2 + 60))
-        screen.blit(score_text, score_rect) 
+        round_text = score_font.render(f'Rounds Survived: {self.current_round}', True, WHITE)
+        
+        score_rect = score_text.get_rect(center=(SCREEN_WIDTH/2, SCREEN_HEIGHT/2 + 20))
+        round_rect = round_text.get_rect(center=(SCREEN_WIDTH/2, SCREEN_HEIGHT/2 + 70))
+        
+        screen.blit(score_text, score_rect)
+        screen.blit(round_text, round_rect)
+        
+        # Restart instruction
+        inst_font = pygame.font.Font(None, 36)
+        inst_text = inst_font.render('Press ESC to exit', True, WHITE)
+        inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH/2, SCREEN_HEIGHT/2 + 150))
+        screen.blit(inst_text, inst_rect) 
