@@ -12,6 +12,7 @@ BLUE = (0, 0, 255)
 GOLD = (255, 215, 0)
 GRAY = (128, 128, 128)
 ORANGE = (255, 140, 0)
+YELLOW = (255, 255, 0)
 
 # Player settings
 PLAYER_SPEED = 6

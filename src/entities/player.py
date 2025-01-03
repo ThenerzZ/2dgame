@@ -5,6 +5,7 @@ from game.settings import *
 from items.inventory import Inventory
 from graphics.animation_handler import AnimationHandler
 from graphics.bullet_particles import BulletParticleSystem
+from graphics.gun_animation_handler import GunAnimationHandler
 
 class Player:
     def __init__(self, character_sprite=None):
@@ -19,8 +20,21 @@ class Player:
         # Animation system
         if self.sprite:
             self.animator = AnimationHandler(self.sprite)
+            # Initialize gun animation
+            gun_sprite = pygame.Surface((24, 12), pygame.SRCALPHA)  # Basic gun shape
+            pygame.draw.rect(gun_sprite, (100, 100, 100), (0, 3, 20, 6))  # Gun body
+            pygame.draw.rect(gun_sprite, (80, 80, 80), (16, 2, 8, 8))  # Gun barrel
+            self.gun_animator = GunAnimationHandler(gun_sprite)
         else:
             self.animator = None
+            self.gun_animator = None
+        
+        # Gun state
+        self.gun_offset_x = 20
+        self.gun_offset_y = 0
+        self.gun_angle = 0
+        self.is_shooting = False
+        self.shoot_cooldown = 0
         
         # Bullet system
         self.bullet_system = BulletParticleSystem()
@@ -99,16 +113,29 @@ class Player:
         if self.attack_timer > 0:
             self.attack_timer -= 1
             
-        # Update attack animation
-        if self.attack_animation_timer > 0:
-            self.attack_animation_timer -= 1
-        else:
-            self.is_attacking = False
+        # Update shoot cooldown
+        if self.shoot_cooldown > 0:
+            self.shoot_cooldown -= 1
             
-        # Update animation frames
+        # Update animations
         if self.animator:
+            # Update character animation
+            if self.is_attacking:
+                self.animator.set_animation('attack')
+            elif abs(self.direction.x) > 0 or abs(self.direction.y) > 0:
+                self.animator.set_animation('walk')
+            else:
+                self.animator.set_animation('idle')
             self.animator.update()
             
+            # Update gun animation
+            if self.gun_animator:
+                self.gun_animator.update()
+                
+        # Calculate gun angle based on movement or target
+        if self.direction.magnitude() > 0:
+            self.gun_angle = math.degrees(math.atan2(self.direction.y, self.direction.x))
+        
         # Update bullet system
         self.bullet_system.update()
         
@@ -118,24 +145,35 @@ class Player:
             current_frame = self.animator.get_current_frame()
             sprite = pygame.transform.flip(current_frame, self.facing_left, False)
             screen.blit(sprite, self.rect)
+            
+            # Draw gun with proper positioning and rotation
+            if self.gun_animator:
+                gun_frame = self.gun_animator.get_current_frame()
+                # Calculate gun position
+                gun_x = self.rect.centerx + (self.gun_offset_x if not self.facing_left else -self.gun_offset_x)
+                gun_y = self.rect.centery + self.gun_offset_y
+                
+                # Rotate gun
+                rotated_gun = pygame.transform.rotate(gun_frame, -self.gun_angle)
+                gun_rect = rotated_gun.get_rect(center=(gun_x, gun_y))
+                
+                # Draw gun
+                screen.blit(rotated_gun, gun_rect)
+                
+                # Draw muzzle flash if shooting
+                muzzle_flash = self.gun_animator.get_muzzle_flash()
+                if muzzle_flash:
+                    # Calculate muzzle position based on gun angle
+                    flash_offset = 24  # Distance from gun center
+                    flash_x = gun_x + math.cos(math.radians(self.gun_angle)) * flash_offset
+                    flash_y = gun_y + math.sin(math.radians(self.gun_angle)) * flash_offset
+                    flash_rect = muzzle_flash.get_rect(center=(flash_x, flash_y))
+                    screen.blit(muzzle_flash, flash_rect)
         else:
             pygame.draw.rect(screen, self.color, self.rect)
         
         # Draw bullets and effects
         self.bullet_system.draw(screen)
-        
-        # Draw attack range indicator (semi-transparent circle)
-        range_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        
-        # Draw attack range with pulsing effect when attacking
-        range_color = (0, 255, 0, 30)
-        if self.is_attacking:
-            # Make the circle pulse when attacking
-            pulse = abs(math.sin(pygame.time.get_ticks() * 0.01)) * 50 + 30
-            range_color = (0, 255, 0, int(pulse))
-            
-        pygame.draw.circle(range_surface, range_color, self.rect.center, self.get_stat("attack_range"))
-        screen.blit(range_surface, (0, 0))
         
         self.draw_health_bar(screen)
         
@@ -178,10 +216,15 @@ class Player:
         
     def attack(self):
         """Shoot at the nearest enemy"""
-        if self.attack_timer <= 0:
+        if self.attack_timer <= 0 and self.shoot_cooldown <= 0:
             self.attack_timer = 60 / self.get_stat("attack_speed")  # 60 frames per second
+            self.shoot_cooldown = 10  # Additional cooldown for gun animation
             self.is_attacking = True
             self.attack_animation_timer = self.attack_animation_duration
+            
+            # Trigger gun shoot animation
+            if self.gun_animator:
+                self.gun_animator.set_animation('shoot')
             
             # Calculate gun position
             gun_x = self.rect.centerx + (self.gun_offset_x if not self.facing_left else -self.gun_offset_x)
@@ -191,7 +234,7 @@ class Player:
             closest_enemy = None
             min_distance = float('inf')
             
-            for enemy in self.current_enemies:  # We'll need to pass this from game state
+            for enemy in self.current_enemies:
                 if self.can_attack_enemy(enemy):
                     dx = enemy.rect.centerx - self.rect.centerx
                     dy = enemy.rect.centery - self.rect.centery
@@ -202,6 +245,11 @@ class Player:
                         closest_enemy = enemy
             
             if closest_enemy:
+                # Update gun angle to face target
+                dx = closest_enemy.rect.centerx - gun_x
+                dy = closest_enemy.rect.centery - gun_y
+                self.gun_angle = math.degrees(math.atan2(dy, dx))
+                
                 # Create bullet effect
                 target_x = closest_enemy.rect.centerx
                 target_y = closest_enemy.rect.centery
