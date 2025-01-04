@@ -47,17 +47,27 @@ class MonsterGenerator:
             self._generate_demon,
             self._generate_ghost
         ]
+        
+        self.death_animations = [
+            self._generate_skeleton_death,  # NORMAL
+            self._generate_slime_death,     # WEAK
+            self._generate_spider_death,    # STRONG
+            self._generate_demon_death,     # ELITE
+            self._generate_ghost_death      # BOSS
+        ]
 
     def generate_monster(self, monster_type=None):
-        """Generate a random monster sprite"""
-        surface = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
-        
+        """Generate a random monster sprite with death animation frames"""
         if monster_type is None:
             generator = random.choice(self.monster_types)
+            death_generator = random.choice(self.death_animations)
         else:
             generator = self.monster_types[monster_type]
+            death_generator = self.death_animations[monster_type]
             
-        return generator(surface)
+        sprite = generator(pygame.Surface((self.size, self.size), pygame.SRCALPHA))
+        death_frames = death_generator()
+        return sprite, death_frames
 
     def _generate_skeleton(self, surface):
         """Generate an undead skeleton warrior"""
@@ -324,3 +334,146 @@ class MonsterGenerator:
         points = random.choice(rune_types)
         adjusted_points = [(x + px, y + py) for px, py in points]
         pygame.draw.lines(surface, color, True, adjusted_points, 1) 
+
+    def _generate_skeleton_death(self):
+        """Generate skeleton death animation frames"""
+        frames = []
+        
+        # Frame 1: Initial collapse
+        frame1 = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        self._generate_skeleton(frame1)
+        frame1 = pygame.transform.rotate(frame1, -15)  # Slight tilt
+        frames.append(frame1)
+        
+        # Frame 2: Breaking apart
+        frame2 = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        bone_color = random.choice(self.colors['bone'])
+        # Draw scattered bones
+        for i in range(4):
+            x = self.size//2 + random.randint(-5, 5)
+            y = self.size//2 + random.randint(-5, 5)
+            pygame.draw.ellipse(frame2, bone_color, (x, y, 4, 2))
+        frames.append(frame2)
+        
+        # Frame 3: Final scattered bones
+        frame3 = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        for i in range(6):
+            x = self.size//2 + random.randint(-8, 8)
+            y = self.size//2 + random.randint(-8, 8)
+            pygame.draw.ellipse(frame3, bone_color, (x, y, 4, 2))
+        frames.append(frame3)
+        
+        return frames
+
+    def _generate_slime_death(self):
+        """Generate slime death animation frames"""
+        frames = []
+        
+        # Frame 1: Initial splat
+        frame1 = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        self._generate_slime(frame1)
+        frame1 = pygame.transform.scale(frame1, (self.size, int(self.size * 0.8)))
+        frames.append(frame1)
+        
+        # Frame 2: Wider splat
+        frame2 = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        slime_color = random.choice(self.colors['slime'])
+        pygame.draw.ellipse(frame2, slime_color, (0, self.size//2, self.size, self.size//4))
+        frames.append(frame2)
+        
+        # Frame 3: Final puddle
+        frame3 = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        pygame.draw.ellipse(frame3, (*slime_color[:3], 128), 
+                          (2, self.size//2 + 2, self.size-4, self.size//6))
+        frames.append(frame3)
+        
+        return frames
+
+    def _generate_spider_death(self):
+        """Generate spider death animation frames"""
+        frames = []
+        
+        # Frame 1: Legs curling
+        frame1 = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        self._generate_spider(frame1)
+        frame1 = pygame.transform.rotate(frame1, 20)
+        frames.append(frame1)
+        
+        # Frame 2: Curled up
+        frame2 = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        chitin_color = random.choice(self.colors['chitin'])
+        # Draw curled body
+        pygame.draw.circle(frame2, chitin_color, (self.size//2, self.size//2), self.size//4)
+        # Draw curled legs
+        for i in range(4):
+            angle = i * math.pi/2
+            x = self.size//2 + math.cos(angle) * self.size//4
+            y = self.size//2 + math.sin(angle) * self.size//4
+            pygame.draw.arc(frame2, chitin_color, 
+                          (x-2, y-2, 4, 4), 0, math.pi, 1)
+        frames.append(frame2)
+        
+        # Frame 3: Final curled state
+        frame3 = frame2.copy()
+        frame3.set_alpha(200)
+        frames.append(frame3)
+        
+        return frames
+
+    def _generate_demon_death(self):
+        """Generate demon death animation frames"""
+        frames = []
+        
+        # Frame 1: Initial burn
+        frame1 = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        self._generate_demon(frame1)
+        # Add fire overlay
+        for _ in range(5):
+            x = random.randint(0, self.size)
+            y = random.randint(0, self.size)
+            pygame.draw.circle(frame1, (255, 100, 0, 128), (x, y), 2)
+        frames.append(frame1)
+        
+        # Frame 2: More intense burn
+        frame2 = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        self._generate_demon(frame2)
+        frame2.fill((255, 100, 0, 100), special_flags=pygame.BLEND_RGBA_ADD)
+        frames.append(frame2)
+        
+        # Frame 3: Final burn
+        frame3 = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        for _ in range(10):
+            x = random.randint(0, self.size)
+            y = random.randint(0, self.size)
+            pygame.draw.circle(frame3, (255, 50, 0, 150), (x, y), 3)
+        frames.append(frame3)
+        
+        return frames
+
+    def _generate_ghost_death(self):
+        """Generate ghost death animation frames"""
+        frames = []
+        
+        # Frame 1: Initial fade
+        frame1 = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        self._generate_ghost(frame1)
+        frame1.set_alpha(200)
+        frames.append(frame1)
+        
+        # Frame 2: Distortion
+        frame2 = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        self._generate_ghost(frame2)
+        frame2 = pygame.transform.scale(frame2, (int(self.size * 1.2), self.size))
+        frame2.set_alpha(150)
+        frames.append(frame2)
+        
+        # Frame 3: Final dissipate
+        frame3 = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
+        ghost_color = random.choice(self.colors['slime'])
+        for _ in range(8):
+            x = random.randint(0, self.size)
+            y = random.randint(0, self.size)
+            pygame.draw.circle(frame3, (*ghost_color[:3], 100), (x, y), 2)
+        frames.append(frame3)
+        
+        return frames 
