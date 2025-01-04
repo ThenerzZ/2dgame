@@ -400,3 +400,34 @@ class GameState:
                             if self.items_bought_this_round >= ITEMS_PER_ROUND:
                                 self.state = GameStates.PLAYING
                                 self.start_new_round()  # Start next round after max purchases 
+
+    def draw_world(self, screen):
+        """Draw only the game world without UI elements"""
+        # Draw base terrain
+        screen.blit(self.terrain, (0, 0))
+        
+        # Draw animated grass details
+        for y in range(SCREEN_HEIGHT // self.terrain_gen.tile_size):
+            for x in range(SCREEN_WIDTH // self.terrain_gen.tile_size):
+                pos = (x * self.terrain_gen.tile_size, y * self.terrain_gen.tile_size)
+                # Only animate grass tiles
+                if self.terrain.get_at((pos[0], pos[1]))[:3] in self.terrain_gen.colors['grass']:
+                    self.terrain_gen.draw_animated_details(screen, pos, 'grass')
+        
+        # Draw bonfire effects
+        for pos in self.bonfire_cooldowns:
+            if self.bonfire_cooldowns[pos] > 0:
+                progress = self.bonfire_cooldowns[pos] / BONFIRE_COOLDOWN
+                radius = BONFIRE_HEAL_RADIUS * (1 - progress)
+                pygame.draw.circle(screen, (*ORANGE, 30), pos, int(radius), 1)
+        
+        # Draw entities
+        self.player.draw(screen)
+        for enemy in self.enemies:
+            enemy.draw(screen)
+            
+        # Draw particle effects
+        self.terrain_gen.draw_particles(screen)
+        
+        # Draw weather effects
+        self.terrain_gen.draw_weather(screen) 

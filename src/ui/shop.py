@@ -54,6 +54,16 @@ class Shop:
         # Update animation time
         self.animation_time += 1
         
+        # Get actual screen dimensions
+        screen_width = screen.get_width()
+        screen_height = screen.get_height()
+        
+        # Recalculate dimensions based on actual screen size
+        self.width = screen_width * 0.8
+        self.height = screen_height * 0.8
+        self.x = (screen_width - self.width) // 2
+        self.y = (screen_height - self.height) // 2
+        
         # Draw main panel with border
         panel_rect = pygame.Rect(self.x, self.y, self.width, self.height)
         
@@ -94,6 +104,9 @@ class Shop:
                            border_radius=radius)
         screen.blit(glow_surf, (title_rect.x - 10, title_rect.y - 10))
         screen.blit(title_text, title_rect)
+        
+        # Recreate item slots with new dimensions
+        self.create_item_slots()
         
         # Draw item slots and items
         for i, (slot, item) in enumerate(zip(self.slots, self.items)):
