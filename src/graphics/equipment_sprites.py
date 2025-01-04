@@ -35,6 +35,16 @@ class WeaponAnimation:
 class EquipmentSprites:
     def __init__(self, size):
         self.size = size
+        # Define color palettes for different materials
+        self.colors = {
+            'metal': [(192, 192, 192), (160, 160, 160), (128, 128, 128)],  # Silver tones
+            'gold': [(255, 215, 0), (218, 165, 32), (184, 134, 11)],      # Gold tones
+            'cloth': [(255, 255, 255), (240, 240, 240), (220, 220, 220)], # White cloth
+            'leather': [(139, 69, 19), (160, 82, 45), (210, 105, 30)],    # Brown leather
+            'magic': [(148, 0, 211), (138, 43, 226), (147, 112, 219)]     # Purple magic
+        }
+        
+        # Initialize weapon animations dictionary
         self.animations = {}
         self._setup_animations()
         

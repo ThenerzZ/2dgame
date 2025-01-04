@@ -19,11 +19,21 @@ class Player:
         self.direction = pygame.math.Vector2()
         self.facing_left = False
         
+        # Weapon positions (4 fixed spots around character)
+        self.weapon_positions = [
+            {'offset': (25, 0), 'base_angle': 0},    # Right
+            {'offset': (0, -25), 'base_angle': 90},  # Top
+            {'offset': (-25, 0), 'base_angle': 180}, # Left
+            {'offset': (0, 25), 'base_angle': 270}   # Bottom
+        ]
+        
         # Equipment system
         self.equipment_sprites = EquipmentSprites(PLAYER_SIZE)
         self.weapons = []  # List of equipped weapons (max 4)
         self.weapon_sprites = []  # List of weapon sprites
         self.weapon_animations = []  # List of weapon animations
+        self.weapon_cooldowns = []  # Cooldown for each weapon
+        self.weapon_particles = []  # Particle effects for each weapon
         self.current_weapon_index = 0
         self.armor_overlays = []  # List of armor visual effects
         
@@ -73,6 +83,8 @@ class Player:
                 animation = self.equipment_sprites.get_animation(item.name)
                 self.weapon_animations.append(animation)
                 self.weapon_cooldowns.append(0)
+                # Create particle system for this weapon
+                self.weapon_particles.append(BulletParticleSystem())
                 # Apply weapon stats
                 item.apply_effect(self)
             else:
@@ -96,8 +108,7 @@ class Player:
                 self.weapon_sprites.pop(index)
                 self.weapon_animations.pop(index)
                 self.weapon_cooldowns.pop(index)
-                if self.current_weapon_index >= len(self.weapons):
-                    self.current_weapon_index = max(0, len(self.weapons) - 1)
+                self.weapon_particles.pop(index)
         elif item.item_type == ItemType.PASSIVE:
             # Remove armor overlay if it exists
             self.armor_overlays = [overlay for overlay in self.armor_overlays 
@@ -192,29 +203,39 @@ class Player:
                 overlay_flipped = pygame.transform.flip(overlay, self.facing_left, False)
                 screen.blit(overlay_flipped, self.rect)
             
-            # Draw all equipped weapons with animations
+            # Draw all equipped weapons with animations in their fixed positions
             for i, weapon_sprite in enumerate(self.weapon_sprites):
-                if weapon_sprite:
-                    # Calculate offset based on weapon index
-                    angle_offset = i * (360 / max(1, len(self.weapon_sprites)))
-                    weapon_angle = self.weapon_angle + angle_offset
+                if weapon_sprite and i < len(self.weapons):
+                    # Get the fixed position for this weapon
+                    pos = self.weapon_positions[i]
                     
-                    # Calculate weapon position
-                    weapon_x = self.rect.centerx + math.cos(math.radians(weapon_angle)) * self.weapon_offset_x
-                    weapon_y = self.rect.centery + math.sin(math.radians(weapon_angle)) * self.weapon_offset_y
+                    # Calculate weapon position relative to character center
+                    weapon_x = self.rect.centerx + pos['offset'][0]
+                    weapon_y = self.rect.centery + pos['offset'][1]
+                    
+                    # Calculate weapon angle based on movement and base position
+                    if self.direction.magnitude() > 0:
+                        target_angle = math.degrees(math.atan2(self.direction.y, self.direction.x))
+                    else:
+                        target_angle = pos['base_angle']
                     
                     # Draw weapon animation if it exists
                     if i < len(self.weapon_animations) and self.weapon_animations[i]:
-                        self.weapon_animations[i].draw(screen, weapon_x, weapon_y, weapon_angle)
+                        self.weapon_animations[i].draw(screen, weapon_x, weapon_y, target_angle)
                     else:
                         # Fallback to static sprite
-                        rotated_weapon = pygame.transform.rotate(weapon_sprite, -weapon_angle)
+                        rotated_weapon = pygame.transform.rotate(weapon_sprite, -target_angle)
                         weapon_rect = rotated_weapon.get_rect(center=(weapon_x, weapon_y))
                         screen.blit(rotated_weapon, weapon_rect)
                     
                     # Draw attack effects if attacking and cooldown is active
                     if self.is_attacking and self.weapon_cooldowns[i] > 0:
                         self._draw_attack_effects(screen, weapon_x, weapon_y, self.weapons[i])
+                        
+                        # Add weapon-specific particles
+                        if i < len(self.weapon_particles):
+                            self.weapon_particles[i].update()
+                            self.weapon_particles[i].draw(screen)
         else:
             pygame.draw.rect(screen, self.color, self.rect)
         
@@ -226,7 +247,7 @@ class Player:
     def _draw_attack_effects(self, screen, weapon_x, weapon_y, weapon):
         """Draw weapon-specific attack effects"""
         if weapon is None:  # Basic attack effect
-            # Enhanced slash effect
+            # Enhanced slash effect with better positioning
             angle = self.weapon_angle
             # Main slash arc
             for i in range(3):
@@ -254,42 +275,249 @@ class Player:
                 pygame.draw.polygon(screen, (200, 200, 200), points)
                 
         elif weapon.name == "Magic Wand":
-            # Magic sparkle effect
-            for _ in range(3):
-                angle = self.weapon_angle + random.uniform(-30, 30)
-                distance = random.uniform(15, 25)
-                effect_x = weapon_x + math.cos(math.radians(angle)) * distance
-                effect_y = weapon_y + math.sin(math.radians(angle)) * distance
+            # Calculate tip of the wand
+            wand_length = 30
+            tip_x = weapon_x + math.cos(math.radians(self.weapon_angle)) * wand_length
+            tip_y = weapon_y + math.sin(math.radians(self.weapon_angle)) * wand_length
+            
+            # Draw magic beam
+            beam_length = 40
+            beam_end_x = tip_x + math.cos(math.radians(self.weapon_angle)) * beam_length
+            beam_end_y = tip_y + math.sin(math.radians(self.weapon_angle)) * beam_length
+            
+            # Draw lightning beam
+            segments = 6
+            points = [(tip_x, tip_y)]
+            for i in range(segments):
+                prev_x, prev_y = points[-1]
+                progress = (i + 1) / segments
+                target_x = tip_x + (beam_end_x - tip_x) * progress
+                target_y = tip_y + (beam_end_y - tip_y) * progress
+                offset = random.uniform(-5, 5) * (1 - progress)  # Less deviation near the end
+                points.append((target_x + offset, target_y + offset))
+            
+            # Draw main beam
+            for i in range(len(points) - 1):
+                pygame.draw.line(screen, (100, 200, 255, 200), points[i], points[i + 1], 2)
+            
+            # Add sparkle effects at the tip
+            for _ in range(4):
+                spark_angle = self.weapon_angle + random.uniform(-30, 30)
+                spark_dist = random.uniform(2, 8)
+                spark_x = tip_x + math.cos(math.radians(spark_angle)) * spark_dist
+                spark_y = tip_y + math.sin(math.radians(spark_angle)) * spark_dist
                 
-                pygame.draw.circle(screen, (100, 200, 255, 150), (int(effect_x), int(effect_y)), 2)
+                # Draw star sparkle
+                size = random.uniform(2, 4)
+                spark_points = []
+                for i in range(5):
+                    point_angle = spark_angle + (i * 72)
+                    px = spark_x + math.cos(math.radians(point_angle)) * size
+                    py = spark_y + math.sin(math.radians(point_angle)) * size
+                    spark_points.append((px, py))
+                pygame.draw.polygon(screen, (200, 220, 255, 200), spark_points)
         
         elif weapon.name == "Fire Wand":
-            # Fire trail effect
-            for _ in range(5):
-                angle = self.weapon_angle + random.uniform(-20, 20)
-                distance = random.uniform(10, 30)
-                effect_x = weapon_x + math.cos(math.radians(angle)) * distance
-                effect_y = weapon_y + math.sin(math.radians(angle)) * distance
+            # Calculate tip of the wand
+            wand_length = 25
+            tip_x = weapon_x + math.cos(math.radians(self.weapon_angle)) * wand_length
+            tip_y = weapon_y + math.sin(math.radians(self.weapon_angle)) * wand_length
+            
+            # Enhanced fire trail effect
+            for _ in range(8):
+                angle = self.weapon_angle + random.uniform(-25, 25)
+                distance = random.uniform(5, 35)
+                effect_x = tip_x + math.cos(math.radians(angle)) * distance
+                effect_y = tip_y + math.sin(math.radians(angle)) * distance
                 
-                size = random.uniform(2, 4)
-                alpha = int(255 * (1 - distance/30))
-                pygame.draw.circle(screen, (255, 100, 0, alpha), 
-                                 (int(effect_x), int(effect_y)), int(size))
+                # Flame particles with better layering
+                size = random.uniform(4, 8) * (1 - distance/35)  # Smaller particles further out
+                alpha = int(255 * (1 - distance/35))
+                
+                colors = [
+                    (255, 255, 200, alpha),  # White-hot core
+                    (255, 200, 50, alpha),   # Yellow middle
+                    (255, 150, 50, alpha),   # Orange outer
+                    (255, 100, 50, alpha),   # Red edge
+                ]
+                
+                for i, color in enumerate(colors):
+                    flame_size = size * (1 - i * 0.2)
+                    flame_surf = pygame.Surface((int(flame_size * 2), int(flame_size * 2)), pygame.SRCALPHA)
+                    pygame.draw.circle(flame_surf, color, 
+                                    (int(flame_size), int(flame_size)), int(flame_size))
+                    screen.blit(flame_surf, (effect_x - flame_size, effect_y - flame_size))
+                    
+                # Add ember particles
+                if random.random() < 0.3:
+                    ember_x = effect_x + random.uniform(-5, 5)
+                    ember_y = effect_y + random.uniform(-5, 5)
+                    ember_size = random.uniform(1, 2)
+                    pygame.draw.circle(screen, (255, 200, 50, alpha), 
+                                    (int(ember_x), int(ember_y)), int(ember_size))
+        
+        elif weapon.name == "Cross Bow":
+            # Calculate bow tip position
+            bow_length = 20
+            tip_x = weapon_x + math.cos(math.radians(self.weapon_angle)) * bow_length
+            tip_y = weapon_y + math.sin(math.radians(self.weapon_angle)) * bow_length
+            
+            # Enhanced arrow effects
+            trail_length = 40
+            num_arrows = 3
+            spread_angles = [-15, 0, 15]  # Fixed spread pattern
+            
+            for spread in spread_angles:
+                trail_angle = self.weapon_angle + spread
+                # Draw arrow trail with fading effect
+                num_segments = 8
+                for i in range(num_segments):
+                    progress = i / num_segments
+                    start_dist = progress * trail_length
+                    end_dist = (progress + 1/num_segments) * trail_length
+                    
+                    start_x = tip_x + math.cos(math.radians(trail_angle)) * start_dist
+                    start_y = tip_y + math.sin(math.radians(trail_angle)) * start_dist
+                    end_x = tip_x + math.cos(math.radians(trail_angle)) * end_dist
+                    end_y = tip_y + math.sin(math.radians(trail_angle)) * end_dist
+                    
+                    alpha = int(255 * (1 - progress))
+                    pygame.draw.line(screen, (150, 150, 150, alpha), 
+                                   (start_x, start_y), (end_x, end_y), 2)
+                
+                # Draw enhanced arrowhead
+                head_x = tip_x + math.cos(math.radians(trail_angle)) * trail_length
+                head_y = tip_y + math.sin(math.radians(trail_angle)) * trail_length
+                
+                head_size = 6
+                head_points = [
+                    (head_x, head_y),
+                    (head_x - head_size * math.cos(math.radians(trail_angle + 140)),
+                     head_y - head_size * math.sin(math.radians(trail_angle + 140))),
+                    (head_x - head_size * 0.5 * math.cos(math.radians(trail_angle)),
+                     head_y - head_size * 0.5 * math.sin(math.radians(trail_angle))),
+                    (head_x - head_size * math.cos(math.radians(trail_angle - 140)),
+                     head_y - head_size * math.sin(math.radians(trail_angle - 140)))
+                ]
+                pygame.draw.polygon(screen, (180, 180, 180), head_points)
+                
+                # Add motion blur particles
+                for _ in range(2):
+                    particle_x = head_x + random.uniform(-5, 5)
+                    particle_y = head_y + random.uniform(-5, 5)
+                    particle_size = random.uniform(1, 2)
+                    pygame.draw.circle(screen, (150, 150, 150, 100),
+                                    (int(particle_x), int(particle_y)), int(particle_size))
+        
+        elif weapon.name == "Whip":
+            # Calculate whip base position
+            whip_segments = 10
+            segment_length = 8
+            points = [(weapon_x, weapon_y)]
+            
+            # Create dynamic whip curve
+            wave_time = pygame.time.get_ticks() / 200.0  # Time-based animation
+            for i in range(whip_segments):
+                progress = i / whip_segments
+                angle = self.weapon_angle + math.sin(wave_time + i * 0.5) * 40 * progress
+                prev_x, prev_y = points[-1]
+                next_x = prev_x + math.cos(math.radians(angle)) * segment_length
+                next_y = prev_y + math.sin(math.radians(angle)) * segment_length
+                points.append((next_x, next_y))
+                
+                # Add dynamic particles along whip
+                if random.random() < 0.6:
+                    particle_angle = angle + random.uniform(-60, 60)
+                    particle_dist = random.uniform(2, 6) * progress
+                    particle_x = next_x + math.cos(math.radians(particle_angle)) * particle_dist
+                    particle_y = next_y + math.sin(math.radians(particle_angle)) * particle_dist
+                    particle_size = random.uniform(1, 2) * (1 - progress)
+                    alpha = int(200 * (1 - progress))
+                    pygame.draw.circle(screen, (200, 150, 100, alpha), 
+                                    (int(particle_x), int(particle_y)), int(particle_size))
+            
+            # Draw whip segments with dynamic thickness and color gradient
+            for i in range(len(points) - 1):
+                progress = i / (len(points) - 1)
+                width = max(1, 4 - (i // 2))
+                color = (
+                    139 - int(40 * progress),
+                    69 - int(20 * progress),
+                    19,
+                    255 - int(100 * progress)
+                )
+                pygame.draw.line(screen, color, points[i], points[i + 1], width)
+            
+            # Add crack effect at whip tip
+            if len(points) > 1:
+                tip_x, tip_y = points[-1]
+                for _ in range(4):
+                    spark_angle = self.weapon_angle + random.uniform(-30, 30)
+                    spark_length = random.uniform(3, 8)
+                    end_x = tip_x + math.cos(math.radians(spark_angle)) * spark_length
+                    end_y = tip_y + math.sin(math.radians(spark_angle)) * spark_length
+                    pygame.draw.line(screen, (200, 150, 100, 150),
+                                   (tip_x, tip_y), (end_x, end_y), 1)
         
         elif weapon.name == "Lightning Ring":
-            # Lightning effect
-            for _ in range(2):
-                start_angle = self.weapon_angle + random.uniform(-30, 30)
-                points = [(weapon_x, weapon_y)]
+            # Calculate ring center
+            ring_radius = 20
+            center_x = weapon_x + math.cos(math.radians(self.weapon_angle)) * ring_radius
+            center_y = weapon_y + math.sin(math.radians(self.weapon_angle)) * ring_radius
+            
+            # Draw the base ring with glow
+            ring_surf = pygame.Surface((ring_radius * 4, ring_radius * 4), pygame.SRCALPHA)
+            pygame.draw.circle(ring_surf, (100, 150, 255, 30), 
+                             (ring_radius * 2, ring_radius * 2), ring_radius * 2)  # Outer glow
+            pygame.draw.circle(ring_surf, (100, 150, 255, 60), 
+                             (ring_radius * 2, ring_radius * 2), ring_radius * 1.5)  # Middle glow
+            pygame.draw.circle(ring_surf, (100, 150, 255, 100), 
+                             (ring_radius * 2, ring_radius * 2), ring_radius, 2)  # Main ring
+            screen.blit(ring_surf, (center_x - ring_radius * 2, center_y - ring_radius * 2))
+            
+            # Enhanced lightning bolts
+            num_bolts = 4
+            for i in range(num_bolts):
+                start_angle = self.weapon_angle + (i * 360 / num_bolts) + random.uniform(-10, 10)
+                start_x = center_x + math.cos(math.radians(start_angle)) * ring_radius
+                start_y = center_y + math.sin(math.radians(start_angle)) * ring_radius
                 
-                for _ in range(3):
-                    angle = start_angle + random.uniform(-45, 45)
-                    length = random.uniform(10, 20)
-                    x = points[-1][0] + math.cos(math.radians(angle)) * length
-                    y = points[-1][1] + math.sin(math.radians(angle)) * length
-                    points.append((x, y))
+                # Create lightning path
+                points = [(start_x, start_y)]
+                bolt_length = random.uniform(30, 40)
+                segments = 5
                 
-                pygame.draw.lines(screen, (100, 150, 255, 180), False, points, 2)
+                for j in range(segments):
+                    prev_x, prev_y = points[-1]
+                    progress = (j + 1) / segments
+                    angle = start_angle + random.uniform(-40, 40) * (1 - progress)
+                    length = bolt_length / segments
+                    next_x = prev_x + math.cos(math.radians(angle)) * length
+                    next_y = prev_y + math.sin(math.radians(angle)) * length
+                    points.append((next_x, next_y))
+                
+                # Draw main lightning bolt with glow
+                for j in range(len(points) - 1):
+                    # Outer glow
+                    pygame.draw.line(screen, (100, 150, 255, 50),
+                                   points[j], points[j + 1], 4)
+                    # Inner bright line
+                    pygame.draw.line(screen, (200, 220, 255, 200),
+                                   points[j], points[j + 1], 2)
+                
+                # Add small arcs between segments
+                for j in range(len(points) - 1):
+                    if random.random() < 0.5:
+                        mid_x = (points[j][0] + points[j + 1][0]) / 2
+                        mid_y = (points[j][1] + points[j + 1][1]) / 2
+                        arc_size = random.uniform(4, 8)
+                        arc_angle = random.uniform(0, 360)
+                        arc_surf = pygame.Surface((arc_size * 2, arc_size * 2), pygame.SRCALPHA)
+                        pygame.draw.arc(arc_surf, (150, 200, 255, 150),
+                                      (0, 0, arc_size * 2, arc_size * 2),
+                                      math.radians(arc_angle),
+                                      math.radians(arc_angle + random.uniform(30, 90)), 2)
+                        screen.blit(arc_surf, (mid_x - arc_size, mid_y - arc_size))
 
     def draw_health_bar(self, screen):
         bar_width = 50
