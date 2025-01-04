@@ -7,7 +7,6 @@ from entities.enemy import Enemy
 from graphics.terrain_generator import TerrainGenerator
 from graphics.character_generator import CharacterGenerator
 from ui.shop import Shop
-from ui.start_menu import StartMenu
 from ui.hud import HUD
 from game.monster_config import (
     get_enemy_pool_for_round,
@@ -37,11 +36,10 @@ class GameState:
         # Initialize UI elements
         self.shop = Shop()
         self.shop.set_player(self.player)  # Set player reference for shop
-        self.start_menu = StartMenu(self.shop, self.player)
         self.hud = HUD()  # Initialize HUD
         
         # Game state
-        self.state = GameStates.MENU
+        self.state = GameStates.PLAYING  # Start directly in playing state
         self.score = 0
         self.current_round = STARTING_ROUND
         self.round_timer = ROUND_DURATION
@@ -55,6 +53,9 @@ class GameState:
         # Difficulty tracking
         self.spawn_timer = 0
         self.current_spawn_delay = ENEMY_SPAWN_DELAY
+        
+        # Start the first round immediately
+        self.start_new_round()
 
     def start_new_round(self):
         """Initialize a new round with progressive difficulty"""
@@ -105,7 +106,12 @@ class GameState:
             self.round_timer -= 1
             if self.round_timer <= 0:
                 self.current_round += 1
-                self.enter_shop_phase()
+                self.state = GameStates.SHOPPING
+                self.shop.refresh_items()  # Refresh shop items for new round
+                self.shop_timer = SHOP_TIME_LIMIT
+                # Heal player partially between rounds
+                self.player.health = min(self.player.max_health, 
+                                       self.player.health + self.player.max_health * 0.3)
             
             # Update bonfire cooldowns and particles
             for pos in self.bonfire_cooldowns:
@@ -143,14 +149,9 @@ class GameState:
             # Handle shop interactions
             self.shop.update()
             
-            # Handle purchase attempts
-            if pygame.mouse.get_pressed()[0]:  # Left click
-                if self.shop.selected_item:
-                    if self.shop.purchase_selected_item(self.player):
-                        self.items_bought_this_round += 1
-            
             # Check if shopping phase should end
             if self.shop_timer <= 0 or self.items_bought_this_round >= ITEMS_PER_ROUND:
+                self.state = GameStates.PLAYING
                 self.start_new_round()
                 
         elif self.state == GameStates.GAME_OVER:
@@ -356,3 +357,56 @@ class GameState:
         inst_text = inst_font.render('Press ESC to exit', True, WHITE)
         inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH/2, SCREEN_HEIGHT/2 + 150))
         screen.blit(inst_text, inst_rect) 
+
+    def handle_input(self, event):
+        """Handle input events for the game state"""
+        if self.state == GameStates.PLAYING:
+            if event.type == pygame.KEYDOWN:
+                # Movement
+                if event.key == pygame.K_w:
+                    self.player.move_up = True
+                elif event.key == pygame.K_s:
+                    self.player.move_down = True
+                elif event.key == pygame.K_a:
+                    self.player.move_left = True
+                elif event.key == pygame.K_d:
+                    self.player.move_right = True
+                elif event.key == pygame.K_ESCAPE:
+                    self.state = GameStates.MENU
+                    
+            elif event.type == pygame.KEYUP:
+                # Stop movement
+                if event.key == pygame.K_w:
+                    self.player.move_up = False
+                elif event.key == pygame.K_s:
+                    self.player.move_down = False
+                elif event.key == pygame.K_a:
+                    self.player.move_left = False
+                elif event.key == pygame.K_d:
+                    self.player.move_right = False
+                    
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                # Attack
+                if event.button == 1:  # Left click
+                    self.player.is_attacking = True
+                # Special ability
+                elif event.button == 3:  # Right click
+                    self.player.use_special_ability()
+                    
+            elif event.type == pygame.MOUSEBUTTONUP:
+                if event.button == 1:  # Left click
+                    self.player.is_attacking = False
+                    
+        elif self.state == GameStates.SHOPPING:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.state = GameStates.PLAYING
+                    self.start_new_round()  # Start next round when leaving shop
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:  # Left click
+                    if self.shop.selected_item is not None:
+                        if self.shop.purchase_selected_item(self.player):
+                            self.items_bought_this_round += 1
+                            if self.items_bought_this_round >= ITEMS_PER_ROUND:
+                                self.state = GameStates.PLAYING
+                                self.start_new_round()  # Start next round after max purchases 

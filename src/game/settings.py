@@ -177,21 +177,94 @@ class GameStates:
     ROUND_TRANSITION = "round_transition"
     GAME_OVER = "game_over" 
 
-# UI Colors
+# UI Colors for Dark Fantasy Theme
+UI_COLORS = {
+    "BACKGROUND": (15, 12, 16),       # Very dark purple-black
+    "PANEL": (28, 21, 32),            # Dark purple-gray
+    "PANEL_LIGHT": (38, 28, 42),      # Lighter purple-gray
+    "BORDER": (66, 40, 90),           # Deep purple
+    "BORDER_HIGHLIGHT": (94, 53, 177), # Bright purple
+    "TEXT": (220, 215, 225),          # Off-white
+    "TEXT_DARK": (150, 142, 155),     # Darker text
+    "ACCENT": (163, 92, 255),         # Bright purple accent
+    "ACCENT_DARK": (102, 51, 153),    # Darker purple accent
+    "HEALTH": (178, 34, 34),          # Blood red
+    "MANA": (51, 153, 255),           # Bright blue
+    "GOLD": (255, 215, 0),            # Gold
+    "SUCCESS": (0, 255, 128),         # Emerald green
+    "WARNING": (255, 140, 0),         # Orange
+    "DANGER": (220, 20, 60)           # Crimson
+}
+
+# Item Rarity Colors (Dark Fantasy Theme)
 ITEM_RARITY_COLORS = {
-    "COMMON": (200, 200, 200),    # Light gray
-    "RARE": (30, 144, 255),       # Dodger blue
-    "EPIC": (147, 112, 219),      # Medium purple
-    "LEGENDARY": (255, 140, 0)     # Dark orange
+    "COMMON": (180, 180, 190),        # Steel gray
+    "UNCOMMON": (0, 255, 128),        # Emerald green
+    "RARE": (51, 153, 255),           # Sapphire blue
+    "EPIC": (163, 92, 255),           # Royal purple
+    "LEGENDARY": (255, 140, 0),       # Burning orange
+    "MYTHIC": (255, 0, 127)           # Deep pink
 }
 
 # UI Settings
-UI_PANEL_COLOR = (40, 44, 52)
-UI_ELEMENT_COLOR = (50, 55, 65)
-UI_HOVER_COLOR = (60, 65, 75)
-UI_SELECTED_COLOR = (70, 75, 85)
-UI_BORDER_COLOR = (80, 85, 95)
-UI_TEXT_COLOR = (220, 220, 220)
+UI_FONT_FAMILY = "medieval"  # Will be loaded from assets
 UI_TITLE_SIZE = 48
-UI_TEXT_SIZE = 32
-UI_SMALL_TEXT_SIZE = 24 
+UI_HEADING_SIZE = 36
+UI_TEXT_SIZE = 24
+UI_SMALL_TEXT_SIZE = 18
+
+# UI Element Sizes
+UI_BUTTON_HEIGHT = 50
+UI_BUTTON_WIDTH = 200
+UI_PANEL_PADDING = 20
+UI_BORDER_WIDTH = 2
+UI_ICON_SIZE = 32
+
+# Animation Timings
+UI_FADE_DURATION = 0.3
+UI_SLIDE_DURATION = 0.4
+TOOLTIP_DELAY = 0.5
+
+# Menu Settings
+MENU_OPTIONS = {
+    "MAIN": [
+        "Continue",
+        "New Game",
+        "Settings",
+        "Credits",
+        "Exit"
+    ],
+    "SETTINGS": [
+        "Graphics",
+        "Sound",
+        "Controls",
+        "Gameplay",
+        "Back"
+    ],
+    "GRAPHICS": [
+        "Resolution",
+        "Fullscreen",
+        "VSync",
+        "Effects Quality",
+        "Back"
+    ],
+    "SOUND": [
+        "Master Volume",
+        "Music Volume",
+        "Effects Volume",
+        "Back"
+    ],
+    "CONTROLS": [
+        "Key Bindings",
+        "Mouse Sensitivity",
+        "Controller",
+        "Back"
+    ],
+    "GAMEPLAY": [
+        "Difficulty",
+        "Tutorial Tips",
+        "Combat Numbers",
+        "Screen Shake",
+        "Back"
+    ]
+} 
