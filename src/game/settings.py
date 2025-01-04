@@ -237,7 +237,6 @@ MENU_OPTIONS = {
     "SETTINGS": [
         "Graphics",
         "Sound",
-        "Gameplay",
         "Back"
     ],
     "GRAPHICS": [
@@ -251,13 +250,6 @@ MENU_OPTIONS = {
         "Master Volume",
         "Music Volume",
         "Effects Volume",
-        "Back"
-    ],
-    "GAMEPLAY": [
-        "Difficulty",
-        "Tutorial Tips",
-        "Combat Numbers",
-        "Screen Shake",
         "Back"
     ]
 } 
