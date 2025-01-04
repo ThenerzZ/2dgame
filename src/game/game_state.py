@@ -89,13 +89,7 @@ class GameState:
                                self.player.health + self.player.max_health * 0.3)
 
     def update(self):
-        if self.state == GameStates.MENU:
-            # Update start menu
-            self.start_menu.update()
-            if self.start_menu.should_start_round:
-                self.start_new_round()
-                
-        elif self.state == GameStates.PLAYING:
+        if self.state == GameStates.PLAYING:
             # Update game entities
             self.player.set_current_enemies(self.enemies)  # Set current enemies for player
             self.player.update()
@@ -159,11 +153,7 @@ class GameState:
             pass
 
     def draw(self, screen):
-        if self.state == GameStates.MENU:
-            # Draw start menu
-            self.start_menu.draw(screen)
-            
-        elif self.state == GameStates.PLAYING:
+        if self.state == GameStates.PLAYING:
             # Draw base terrain
             screen.blit(self.terrain, (0, 0))
             

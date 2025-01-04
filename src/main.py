@@ -19,6 +19,7 @@ class Game:
         self.main_menu = MainMenu()
         self.current_state = GameStates.MENU
         self.clock = pygame.time.Clock()
+        self.paused_game_state = None  # Store game state when paused
         
     def run(self):
         running = True
@@ -33,7 +34,16 @@ class Game:
                     self.main_menu.handle_input(event)
                     if self.main_menu.should_start_game:
                         self.current_state = GameStates.PLAYING
-                        self.game_state = GameState()  # Create new game state
+                        if self.main_menu.continue_game and self.paused_game_state:
+                            # Restore the paused game state
+                            self.game_state = self.paused_game_state
+                            self.paused_game_state = None
+                            # Make sure the game state is set to PLAYING
+                            self.game_state.state = GameStates.PLAYING
+                        else:
+                            # Create new game state
+                            self.game_state = GameState()
+                            self.paused_game_state = None
                         self.main_menu.should_start_game = False
                         
                 # Handle game input when playing
@@ -42,8 +52,10 @@ class Game:
                     # Check if game state wants to return to menu
                     if self.game_state.state == GameStates.MENU:
                         self.current_state = GameStates.MENU
+                        # Store the current game state before switching to menu
+                        self.paused_game_state = self.game_state
                         self.game_state = None
-                        self.main_menu.reset()  # Reset menu state
+                        self.main_menu.reset(has_game_to_continue=True)
             
             # Update
             if self.current_state == GameStates.MENU:
@@ -53,11 +65,11 @@ class Game:
                 
                 # Check for game over
                 if self.game_state.state == GameStates.GAME_OVER:
-                    # Wait for ESC to return to menu
                     if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                         self.current_state = GameStates.MENU
                         self.game_state = None
-                        self.main_menu.reset()  # Reset menu state
+                        self.paused_game_state = None  # Clear paused game on game over
+                        self.main_menu.reset(has_game_to_continue=False)
             
             # Draw
             self.screen.fill(UI_COLORS["BACKGROUND"])

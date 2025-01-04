@@ -11,6 +11,8 @@ class MainMenu:
         self.transition_alpha = 255
         self.fade_out = False
         self.should_start_game = False
+        self.continue_game = False  # Flag to indicate if we're continuing a game
+        self.has_game_to_continue = False  # Flag to indicate if there's a game to continue
         
         # Menu state variables
         self.settings = {
@@ -153,6 +155,10 @@ class MainMenu:
         
         # Create text surface
         color = UI_COLORS["ACCENT"] if selected else UI_COLORS["TEXT"]
+        # Gray out continue option if not available
+        if text == "Continue" and not self.has_game_to_continue:
+            color = UI_COLORS["TEXT_DARK"]
+            
         text_surf = self.option_font.render(text, True, color)
         text_surf = pygame.transform.scale(text_surf, 
                                          (int(text_surf.get_width() * scale),
@@ -162,7 +168,7 @@ class MainMenu:
         text_rect = text_surf.get_rect(center=(SCREEN_WIDTH//2, y + hover_offset))
         
         # Draw selection indicator
-        if selected:
+        if selected and (text != "Continue" or self.has_game_to_continue):
             # Draw glowing border
             border_rect = text_rect.inflate(40, 20)
             for offset in range(4, 0, -1):
@@ -270,9 +276,14 @@ class MainMenu:
         selected = MENU_OPTIONS[self.current_menu][self.selected_option]
         
         if self.current_menu == "MAIN":
-            if selected == "New Game":
+            if selected == "Continue" and self.has_game_to_continue:
                 self.fade_out = True
                 self.should_start_game = True
+                self.continue_game = True
+            elif selected == "New Game":
+                self.fade_out = True
+                self.should_start_game = True
+                self.continue_game = False
             elif selected == "Settings":
                 self.current_menu = "SETTINGS"
                 self.selected_option = 0
@@ -334,11 +345,13 @@ class MainMenu:
             elif setting == "Tutorial Tips":
                 settings["tutorial"] = not settings["tutorial"] 
 
-    def reset(self):
+    def reset(self, has_game_to_continue=False):
         """Reset menu state when returning from game"""
         self.current_menu = "MAIN"
         self.selected_option = 0
         self.transition_alpha = 0  # Start fully visible
         self.fade_out = False
         self.should_start_game = False
+        self.continue_game = False
+        self.has_game_to_continue = has_game_to_continue
         self.animation_time = 0 
