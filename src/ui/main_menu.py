@@ -76,6 +76,10 @@ class MainMenu:
             self.transition_alpha = max(0, self.transition_alpha - 5)
             
     def draw(self, screen):
+        # Get actual screen dimensions
+        screen_width = screen.get_width()
+        screen_height = screen.get_height()
+        
         # Draw background with parallax effect
         screen.fill(UI_COLORS["BACKGROUND"])
         
@@ -85,7 +89,7 @@ class MainMenu:
         # Draw title
         title_text = "Dark Fantasy Game"
         title_surf = self.title_font.render(title_text, True, UI_COLORS["ACCENT"])
-        title_rect = title_surf.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//4))
+        title_rect = title_surf.get_rect(center=(screen_width//2, screen_height//4))
         
         # Add glow effect to title
         glow_surf = pygame.Surface((title_surf.get_width() + 20, title_surf.get_height() + 20), pygame.SRCALPHA)
@@ -100,7 +104,7 @@ class MainMenu:
         screen.blit(title_surf, title_rect)
         
         # Draw menu options
-        option_y = SCREEN_HEIGHT//2
+        option_y = screen_height//2
         menu_options = MENU_OPTIONS.get(self.current_menu, [])
         for i, option in enumerate(menu_options):
             selected = i == self.selected_option
@@ -108,7 +112,7 @@ class MainMenu:
             option_y += UI_BUTTON_HEIGHT + 10
             
         # Draw settings values if in settings menus
-        if self.current_menu in ["GRAPHICS", "SOUND", "CONTROLS", "GAMEPLAY"]:
+        if self.current_menu in ["GRAPHICS", "SOUND"]:
             self.draw_settings_values(screen)
             
         # Draw particles
@@ -121,12 +125,14 @@ class MainMenu:
             
         # Draw fade overlay
         if self.transition_alpha > 0:
-            fade_surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            fade_surf = pygame.Surface((screen_width, screen_height))
             fade_surf.fill((0, 0, 0))
             fade_surf.set_alpha(self.transition_alpha)
             screen.blit(fade_surf, (0, 0))
             
     def draw_menu_option(self, screen, text, y, selected):
+        screen_width = screen.get_width()
+        
         # Calculate hover effect
         hover_offset = math.sin(self.animation_time * 0.05) * 3 if selected else 0
         scale = 1.1 if selected else 1.0
@@ -143,7 +149,7 @@ class MainMenu:
                                           int(text_surf.get_height() * scale)))
         
         # Position text
-        text_rect = text_surf.get_rect(center=(SCREEN_WIDTH//2, y + hover_offset))
+        text_rect = text_surf.get_rect(center=(screen_width//2, y + hover_offset))
         
         # Draw selection indicator
         if selected and (text != "Continue" or self.has_game_to_continue):
@@ -169,6 +175,9 @@ class MainMenu:
         
     def draw_settings_values(self, screen):
         """Draw current values for settings options"""
+        screen_width = screen.get_width()
+        screen_height = screen.get_height()
+        
         if self.current_menu == "GRAPHICS":
             resolution = self.settings_manager.get_setting("graphics", "resolution")
             fullscreen = self.settings_manager.get_setting("graphics", "fullscreen")
@@ -191,18 +200,6 @@ class MainMenu:
                 f"{int(effects * 100)}%",
                 ""  # Back button has no value
             ]
-        elif self.current_menu == "GAMEPLAY":
-            difficulty = self.settings_manager.get_setting("gameplay", "difficulty")
-            tutorial = self.settings_manager.get_setting("gameplay", "tutorial_tips")
-            combat_nums = self.settings_manager.get_setting("gameplay", "combat_numbers")
-            screen_shake = self.settings_manager.get_setting("gameplay", "screen_shake")
-            values = [
-                difficulty,
-                "On" if tutorial else "Off",
-                "On" if combat_nums else "Off",
-                "On" if screen_shake else "Off",
-                ""  # Back button has no value
-            ]
         else:
             return
             
@@ -211,16 +208,19 @@ class MainMenu:
             if value:  # Don't draw empty values (for Back button)
                 text_surf = self.option_font.render(value, True, UI_COLORS["TEXT_DARK"])
                 text_rect = text_surf.get_rect(
-                    midleft=(SCREEN_WIDTH//2 + 150, 
-                            SCREEN_HEIGHT//2 + i * (UI_BUTTON_HEIGHT + 10))
+                    midleft=(screen_width//2 + 150, 
+                            screen_height//2 + i * (UI_BUTTON_HEIGHT + 10))
                 )
                 screen.blit(text_surf, text_rect)
-        
+                
     def draw_decorative_patterns(self, screen):
+        screen_width = screen.get_width()
+        screen_height = screen.get_height()
+        
         # Draw corner decorations
         corner_size = 100
-        for corner in [(0, 0), (SCREEN_WIDTH, 0), 
-                      (0, SCREEN_HEIGHT), (SCREEN_WIDTH, SCREEN_HEIGHT)]:
+        for corner in [(0, 0), (screen_width, 0), 
+                      (0, screen_height), (screen_width, screen_height)]:
             points = []
             for i in range(4):
                 angle = i * (math.pi / 2) + (math.pi / 4)
@@ -231,15 +231,15 @@ class MainMenu:
             
         # Draw animated border lines
         border_offset = (self.animation_time * 2) % 40
-        for i in range(0, SCREEN_WIDTH, 40):
+        for i in range(0, screen_width, 40):
             alpha = abs(math.sin(self.animation_time * 0.02 + i * 0.01)) * 255
             color = (*UI_COLORS["BORDER"][:3], int(alpha))
             pygame.draw.line(screen, color,
                            (i - border_offset, 0),
                            (i - border_offset + 20, 0), 2)
             pygame.draw.line(screen, color,
-                           (i - border_offset, SCREEN_HEIGHT),
-                           (i - border_offset + 20, SCREEN_HEIGHT), 2)
+                           (i - border_offset, screen_height),
+                           (i - border_offset + 20, screen_height), 2)
             
     def handle_input(self, event):
         if event.type == pygame.KEYDOWN:
