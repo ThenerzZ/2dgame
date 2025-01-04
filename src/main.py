@@ -9,14 +9,23 @@ class Game:
     def __init__(self):
         pygame.init()
         
-        # Initialize display
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        # Initialize settings first
+        self.settings_manager = SettingsManager()
+        
+        # Initialize display with current settings
+        resolution = self.settings_manager.get_setting("graphics", "resolution")
+        fullscreen = self.settings_manager.get_setting("graphics", "fullscreen")
+        flags = pygame.FULLSCREEN if fullscreen else 0
+        self.screen = pygame.display.set_mode(resolution, flags)
         pygame.display.set_caption("Dark Fantasy Game")
         
+        # Track current display state
+        self.current_resolution = resolution
+        self.current_fullscreen = fullscreen
+        
         # Initialize game states
-        self.settings_manager = SettingsManager()
         self.game_state = None
-        self.main_menu = MainMenu()
+        self.main_menu = MainMenu(self.settings_manager)
         self.current_state = GameStates.MENU
         self.clock = pygame.time.Clock()
         self.paused_game_state = None  # Store game state when paused
@@ -45,7 +54,21 @@ class Game:
                             self.game_state = GameState()
                             self.paused_game_state = None
                         self.main_menu.should_start_game = False
-                        
+                    
+                    # Check if graphics settings have changed
+                    resolution = self.settings_manager.get_setting("graphics", "resolution")
+                    fullscreen = self.settings_manager.get_setting("graphics", "fullscreen")
+                    vsync = self.settings_manager.get_setting("graphics", "vsync")
+                    
+                    # Update display mode if needed
+                    if resolution != self.current_resolution or fullscreen != self.current_fullscreen:
+                        flags = pygame.FULLSCREEN if fullscreen else 0
+                        if vsync:
+                            flags |= pygame.DOUBLEBUF | pygame.HWSURFACE
+                        self.screen = pygame.display.set_mode(resolution, flags)
+                        self.current_resolution = resolution
+                        self.current_fullscreen = fullscreen
+                    
                 # Handle game input when playing
                 elif self.current_state == GameStates.PLAYING and self.game_state:
                     self.game_state.handle_input(event)
@@ -80,7 +103,13 @@ class Game:
                 self.game_state.draw(self.screen)
             
             pygame.display.flip()
-            self.clock.tick(FPS)
+            
+            # Apply vsync setting
+            vsync = self.settings_manager.get_setting("graphics", "vsync")
+            if vsync:
+                self.clock.tick(FPS)
+            else:
+                self.clock.tick_busy_loop(FPS)
             
         pygame.quit()
         sys.exit()

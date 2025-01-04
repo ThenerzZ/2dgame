@@ -5,51 +5,29 @@ import sys
 from game.settings import *
 
 class MainMenu:
-    def __init__(self):
+    def __init__(self, settings_manager):
         self.current_menu = "MAIN"
         self.selected_option = 0
         self.transition_alpha = 255
         self.fade_out = False
         self.should_start_game = False
-        self.continue_game = False  # Flag to indicate if we're continuing a game
-        self.has_game_to_continue = False  # Flag to indicate if there's a game to continue
-        
-        # Menu state variables
-        self.settings = {
-            "graphics": {
-                "resolution": "1280x720",
-                "fullscreen": False,
-                "vsync": True,
-                "effects": "High"
-            },
-            "sound": {
-                "master": 100,
-                "music": 70,
-                "effects": 80
-            },
-            "controls": {
-                "mouse_sensitivity": 100,
-                "invert_y": False
-            },
-            "gameplay": {
-                "difficulty": "Normal",
-                "tutorial": True
-            }
-        }
+        self.continue_game = False
+        self.has_game_to_continue = False
+        self.settings_manager = settings_manager
         
         # Animation variables
         self.animation_time = 0
         self.hover_scale = 1.0
         self.particles = []
-        self.background_offset = 0
-        
-        # Load and scale background
-        self.background = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-        self.background.fill(UI_COLORS["BACKGROUND"])
+        self.background_offset = 0  # Initialize background offset
         
         # Initialize fonts
         self.title_font = pygame.font.Font(None, UI_TITLE_SIZE)
         self.option_font = pygame.font.Font(None, UI_TEXT_SIZE)
+        
+        # Load and scale background
+        self.background = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.background.fill(UI_COLORS["BACKGROUND"])
         
         # Create decorative elements
         self.create_decorative_elements()
@@ -131,7 +109,7 @@ class MainMenu:
             
         # Draw settings values if in settings menus
         if self.current_menu in ["GRAPHICS", "SOUND", "CONTROLS", "GAMEPLAY"]:
-            self.draw_settings_values(screen, option_y)
+            self.draw_settings_values(screen)
             
         # Draw particles
         for particle in self.particles:
@@ -189,37 +167,40 @@ class MainMenu:
             
         screen.blit(text_surf, text_rect)
         
-    def draw_settings_values(self, screen, base_y):
+    def draw_settings_values(self, screen):
         """Draw current values for settings options"""
         if self.current_menu == "GRAPHICS":
-            settings = self.settings["graphics"]
+            resolution = self.settings_manager.get_setting("graphics", "resolution")
+            fullscreen = self.settings_manager.get_setting("graphics", "fullscreen")
+            vsync = self.settings_manager.get_setting("graphics", "vsync")
+            effects = self.settings_manager.get_setting("graphics", "effects_quality")
             values = [
-                f"{settings['resolution']}",
-                f"{'On' if settings['fullscreen'] else 'Off'}",
-                f"{'On' if settings['vsync'] else 'Off'}",
-                f"{settings['effects']}",
+                f"{resolution[0]}x{resolution[1]}",
+                "On" if fullscreen else "Off",
+                "On" if vsync else "Off",
+                effects,
                 ""  # Back button has no value
             ]
         elif self.current_menu == "SOUND":
-            settings = self.settings["sound"]
+            master = self.settings_manager.get_setting("sound", "master_volume")
+            music = self.settings_manager.get_setting("sound", "music_volume")
+            effects = self.settings_manager.get_setting("sound", "effects_volume")
             values = [
-                f"{settings['master']}%",
-                f"{settings['music']}%",
-                f"{settings['effects']}%",
-                ""  # Back button has no value
-            ]
-        elif self.current_menu == "CONTROLS":
-            settings = self.settings["controls"]
-            values = [
-                f"{settings['mouse_sensitivity']}%",
-                f"{'On' if settings['invert_y'] else 'Off'}",
+                f"{int(master * 100)}%",
+                f"{int(music * 100)}%",
+                f"{int(effects * 100)}%",
                 ""  # Back button has no value
             ]
         elif self.current_menu == "GAMEPLAY":
-            settings = self.settings["gameplay"]
+            difficulty = self.settings_manager.get_setting("gameplay", "difficulty")
+            tutorial = self.settings_manager.get_setting("gameplay", "tutorial_tips")
+            combat_nums = self.settings_manager.get_setting("gameplay", "combat_numbers")
+            screen_shake = self.settings_manager.get_setting("gameplay", "screen_shake")
             values = [
-                f"{settings['difficulty']}",
-                f"{'On' if settings['tutorial'] else 'Off'}",
+                difficulty,
+                "On" if tutorial else "Off",
+                "On" if combat_nums else "Off",
+                "On" if screen_shake else "Off",
                 ""  # Back button has no value
             ]
         else:
@@ -306,44 +287,65 @@ class MainMenu:
     def handle_setting_change(self, setting):
         """Handle changes to settings values"""
         if self.current_menu == "GRAPHICS":
-            settings = self.settings["graphics"]
             if setting == "Resolution":
                 resolutions = ["1280x720", "1920x1080", "2560x1440"]
-                current_idx = resolutions.index(settings["resolution"])
-                settings["resolution"] = resolutions[(current_idx + 1) % len(resolutions)]
+                current = self.settings_manager.get_setting("graphics", "resolution")
+                current_str = f"{current[0]}x{current[1]}"
+                current_idx = resolutions.index(current_str)
+                next_res = resolutions[(current_idx + 1) % len(resolutions)]
+                width, height = map(int, next_res.split('x'))
+                self.settings_manager.set_setting("graphics", "resolution", (width, height))
+                
             elif setting == "Fullscreen":
-                settings["fullscreen"] = not settings["fullscreen"]
+                current = self.settings_manager.get_setting("graphics", "fullscreen")
+                self.settings_manager.set_setting("graphics", "fullscreen", not current)
+                
             elif setting == "VSync":
-                settings["vsync"] = not settings["vsync"]
+                current = self.settings_manager.get_setting("graphics", "vsync")
+                self.settings_manager.set_setting("graphics", "vsync", not current)
+                
             elif setting == "Effects Quality":
                 qualities = ["Low", "Medium", "High", "Ultra"]
-                current_idx = qualities.index(settings["effects"])
-                settings["effects"] = qualities[(current_idx + 1) % len(qualities)]
+                current = self.settings_manager.get_setting("graphics", "effects_quality")
+                current_idx = qualities.index(current)
+                next_quality = qualities[(current_idx + 1) % len(qualities)]
+                self.settings_manager.set_setting("graphics", "effects_quality", next_quality)
                 
         elif self.current_menu == "SOUND":
-            settings = self.settings["sound"]
             if setting == "Master Volume":
-                settings["master"] = (settings["master"] + 10) % 110
-            elif setting == "Music Volume":
-                settings["music"] = (settings["music"] + 10) % 110
-            elif setting == "Effects Volume":
-                settings["effects"] = (settings["effects"] + 10) % 110
+                current = int(self.settings_manager.get_setting("sound", "master_volume") * 100)
+                next_value = (current + 10) % 110
+                self.settings_manager.set_setting("sound", "master_volume", next_value / 100)
                 
-        elif self.current_menu == "CONTROLS":
-            settings = self.settings["controls"]
-            if setting == "Mouse Sensitivity":
-                settings["mouse_sensitivity"] = (settings["mouse_sensitivity"] + 10) % 110
-            elif setting == "Invert Y-Axis":
-                settings["invert_y"] = not settings["invert_y"]
+            elif setting == "Music Volume":
+                current = int(self.settings_manager.get_setting("sound", "music_volume") * 100)
+                next_value = (current + 10) % 110
+                self.settings_manager.set_setting("sound", "music_volume", next_value / 100)
+                
+            elif setting == "Effects Volume":
+                current = int(self.settings_manager.get_setting("sound", "effects_volume") * 100)
+                next_value = (current + 10) % 110
+                self.settings_manager.set_setting("sound", "effects_volume", next_value / 100)
                 
         elif self.current_menu == "GAMEPLAY":
-            settings = self.settings["gameplay"]
             if setting == "Difficulty":
                 difficulties = ["Easy", "Normal", "Hard", "Nightmare"]
-                current_idx = difficulties.index(settings["difficulty"])
-                settings["difficulty"] = difficulties[(current_idx + 1) % len(difficulties)]
+                current = self.settings_manager.get_setting("gameplay", "difficulty")
+                current_idx = difficulties.index(current)
+                next_difficulty = difficulties[(current_idx + 1) % len(difficulties)]
+                self.settings_manager.set_setting("gameplay", "difficulty", next_difficulty)
+                
             elif setting == "Tutorial Tips":
-                settings["tutorial"] = not settings["tutorial"] 
+                current = self.settings_manager.get_setting("gameplay", "tutorial_tips")
+                self.settings_manager.set_setting("gameplay", "tutorial_tips", not current)
+                
+            elif setting == "Combat Numbers":
+                current = self.settings_manager.get_setting("gameplay", "combat_numbers")
+                self.settings_manager.set_setting("gameplay", "combat_numbers", not current)
+                
+            elif setting == "Screen Shake":
+                current = self.settings_manager.get_setting("gameplay", "screen_shake")
+                self.settings_manager.set_setting("gameplay", "screen_shake", not current)
 
     def reset(self, has_game_to_continue=False):
         """Reset menu state when returning from game"""

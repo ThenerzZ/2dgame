@@ -1,0 +1,36 @@
+{
+    "graphics": {
+        "resolution": [
+            1920,
+            1080
+        ],
+        "fullscreen": true,
+        "vsync": true,
+        "effects_quality": "Ultra"
+    },
+    "sound": {
+        "master_volume": 1.0,
+        "music_volume": 0.7,
+        "effects_volume": 0.8
+    },
+    "controls": {
+        "mouse_sensitivity": 1.0,
+        "key_bindings": {
+            "move_up": 119,
+            "move_down": 115,
+            "move_left": 97,
+            "move_right": 100,
+            "attack": 1,
+            "special": 3,
+            "dash": 32,
+            "inventory": 105,
+            "pause": 27
+        }
+    },
+    "gameplay": {
+        "difficulty": "Normal",
+        "tutorial_tips": true,
+        "combat_numbers": true,
+        "screen_shake": true
+    }
+}

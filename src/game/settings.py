@@ -237,7 +237,6 @@ MENU_OPTIONS = {
     "SETTINGS": [
         "Graphics",
         "Sound",
-        "Controls",
         "Gameplay",
         "Back"
     ],
@@ -252,12 +251,6 @@ MENU_OPTIONS = {
         "Master Volume",
         "Music Volume",
         "Effects Volume",
-        "Back"
-    ],
-    "CONTROLS": [
-        "Key Bindings",
-        "Mouse Sensitivity",
-        "Controller",
         "Back"
     ],
     "GAMEPLAY": [
