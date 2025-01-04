@@ -4,6 +4,7 @@ from game.game_state import GameState
 from ui.main_menu import MainMenu
 from game.settings import *
 from game.settings_manager import SettingsManager
+from game.sound_manager import SoundManager
 
 class Game:
     def __init__(self):
@@ -12,12 +13,15 @@ class Game:
         # Initialize settings first
         self.settings_manager = SettingsManager()
         
+        # Initialize sound manager
+        self.sound_manager = SoundManager(self.settings_manager)
+        
         # Initialize display with current settings
         resolution = self.settings_manager.get_setting("graphics", "resolution")
         fullscreen = self.settings_manager.get_setting("graphics", "fullscreen")
         flags = pygame.FULLSCREEN if fullscreen else 0
         self.screen = pygame.display.set_mode(resolution, flags)
-        pygame.display.set_caption("Dark Fantasy Game")
+        pygame.display.set_caption("Pixel Survivors")
         
         # Create game surface at base resolution
         self.game_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -28,7 +32,7 @@ class Game:
         
         # Initialize game states
         self.game_state = None
-        self.main_menu = MainMenu(self.settings_manager)
+        self.main_menu = MainMenu(self.settings_manager, self.sound_manager)
         self.current_state = GameStates.MENU
         self.clock = pygame.time.Clock()
         self.paused_game_state = None  # Store game state when paused

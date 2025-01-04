@@ -5,7 +5,7 @@ import sys
 from game.settings import *
 
 class MainMenu:
-    def __init__(self, settings_manager):
+    def __init__(self, settings_manager, sound_manager):
         self.current_menu = "MAIN"
         self.selected_option = 0
         self.transition_alpha = 255
@@ -14,6 +14,7 @@ class MainMenu:
         self.continue_game = False
         self.has_game_to_continue = False
         self.settings_manager = settings_manager
+        self.sound_manager = sound_manager
         
         # Animation variables
         self.animation_time = 0
@@ -265,13 +266,16 @@ class MainMenu:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 self.selected_option = (self.selected_option - 1) % len(MENU_OPTIONS[self.current_menu])
+                self.sound_manager.play_sound("menu_select")
             elif event.key == pygame.K_DOWN:
                 self.selected_option = (self.selected_option + 1) % len(MENU_OPTIONS[self.current_menu])
+                self.sound_manager.play_sound("menu_select")
             elif event.key == pygame.K_RETURN:
                 self.select_current_option()
             elif event.key == pygame.K_ESCAPE and self.current_menu != "MAIN":
                 self.current_menu = "MAIN"
                 self.selected_option = 0
+                self.sound_manager.play_sound("menu_back")
                 
     def select_current_option(self):
         selected = MENU_OPTIONS[self.current_menu][self.selected_option]
@@ -281,16 +285,20 @@ class MainMenu:
                 self.fade_out = True
                 self.should_start_game = True
                 self.continue_game = True
+                self.sound_manager.play_sound("menu_confirm")
             elif selected == "New Game":
                 self.fade_out = True
                 self.should_start_game = True
                 self.continue_game = False
+                self.sound_manager.play_sound("menu_confirm")
             elif selected == "Settings":
                 self.current_menu = "SETTINGS"
                 self.selected_option = 0
+                self.sound_manager.play_sound("menu_confirm")
             elif selected == "Credits":
                 self.current_menu = "CREDITS"
                 self.selected_option = 0
+                self.sound_manager.play_sound("menu_confirm")
             elif selected == "Exit":
                 pygame.quit()
                 sys.exit()
@@ -298,18 +306,23 @@ class MainMenu:
             if selected == "Back":
                 self.current_menu = "MAIN"
                 self.selected_option = 0
+                self.sound_manager.play_sound("menu_back")
             else:
                 self.current_menu = selected.upper()
                 self.selected_option = 0
+                self.sound_manager.play_sound("menu_confirm")
         elif self.current_menu == "CREDITS" and selected == "Back":
             self.current_menu = "MAIN"
             self.selected_option = 0
+            self.sound_manager.play_sound("menu_back")
         elif self.current_menu in ["GRAPHICS", "SOUND"] and selected == "Back":
             self.current_menu = "SETTINGS"
             self.selected_option = 0
+            self.sound_manager.play_sound("menu_back")
         else:
             # Handle settings changes
             self.handle_setting_change(selected)
+            self.sound_manager.play_sound("menu_select")
 
     def handle_setting_change(self, setting):
         """Handle changes to settings values"""
