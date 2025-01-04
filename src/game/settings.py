@@ -234,6 +234,12 @@ MENU_OPTIONS = {
         "Credits",
         "Exit"
     ],
+    "CREDITS": [
+        "Pixel Survivors",
+        "Created by ThenerzZ",
+        "A Roguelike Adventure",
+        "Back"
+    ],
     "SETTINGS": [
         "Graphics",
         "Sound",

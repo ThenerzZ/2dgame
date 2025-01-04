@@ -87,7 +87,7 @@ class MainMenu:
         self.draw_decorative_patterns(screen)
         
         # Draw title
-        title_text = "Dark Fantasy Game"
+        title_text = "Pixel Survivors"
         title_surf = self.title_font.render(title_text, True, UI_COLORS["ACCENT"])
         title_rect = title_surf.get_rect(center=(screen_width//2, screen_height//4))
         
@@ -143,6 +143,26 @@ class MainMenu:
         if text == "Continue" and not self.has_game_to_continue:
             color = UI_COLORS["TEXT_DARK"]
             
+        # Special handling for credits text
+        if self.current_menu == "CREDITS" and text != "Back":
+            # Make credits text larger and centered
+            text_surf = self.title_font.render(text, True, UI_COLORS["ACCENT"])
+            # Add glow effect for credits
+            glow_surf = pygame.Surface((text_surf.get_width() + 20, text_surf.get_height() + 20), pygame.SRCALPHA)
+            for radius in range(10, 0, -2):
+                glow_color = (*UI_COLORS["ACCENT"][:3], 5)
+                pygame.draw.rect(glow_surf, glow_color, 
+                               (10-radius, 10-radius, 
+                                text_surf.get_width() + radius*2, 
+                                text_surf.get_height() + radius*2),
+                               border_radius=radius)
+            # Position text
+            text_rect = text_surf.get_rect(center=(screen_width//2, y))
+            # Draw glow and text
+            screen.blit(glow_surf, (text_rect.x - 10, text_rect.y - 10))
+            screen.blit(text_surf, text_rect)
+            return
+            
         text_surf = self.option_font.render(text, True, color)
         text_surf = pygame.transform.scale(text_surf, 
                                          (int(text_surf.get_width() * scale),
@@ -170,7 +190,7 @@ class MainMenu:
                            (text_rect.right + 30, text_rect.centery),
                            (text_rect.right + 30 - decoration_length, text_rect.centery),
                            2)
-            
+        
         screen.blit(text_surf, text_rect)
         
     def draw_settings_values(self, screen):
@@ -268,21 +288,28 @@ class MainMenu:
             elif selected == "Settings":
                 self.current_menu = "SETTINGS"
                 self.selected_option = 0
+            elif selected == "Credits":
+                self.current_menu = "CREDITS"
+                self.selected_option = 0
             elif selected == "Exit":
                 pygame.quit()
                 sys.exit()
         elif self.current_menu == "SETTINGS":
             if selected == "Back":
                 self.current_menu = "MAIN"
+                self.selected_option = 0
             else:
                 self.current_menu = selected.upper()
+                self.selected_option = 0
+        elif self.current_menu == "CREDITS" and selected == "Back":
+            self.current_menu = "MAIN"
             self.selected_option = 0
-        elif selected == "Back":
+        elif self.current_menu in ["GRAPHICS", "SOUND"] and selected == "Back":
             self.current_menu = "SETTINGS"
             self.selected_option = 0
         else:
             # Handle settings changes
-            self.handle_setting_change(selected) 
+            self.handle_setting_change(selected)
 
     def handle_setting_change(self, setting):
         """Handle changes to settings values"""
