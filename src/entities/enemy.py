@@ -3,6 +3,7 @@ import random
 import math
 from game.settings import *
 from graphics.monster_generator import MonsterGenerator
+from game.monster_config import MonsterType, get_monster_config, get_death_config, DifficultyTier
 
 class Enemy:
     def __init__(self):
@@ -12,17 +13,21 @@ class Enemy:
         
         # Generate sprite
         self.monster_gen = MonsterGenerator(size=32)
-        self.sprite = None  # Will be set when tier is assigned
-        self.death_frames = None  # Will be set when tier is assigned
+        self.sprite = None  # Will be set when type is assigned
+        self.death_frames = None  # Will be set when type is assigned
         self.facing_left = False
         
-        # These will be set by the tier system
+        # Monster type and configuration
+        self.monster_type = None
+        self.config = None
+        
+        # Stats will be set from config
         self.health = 0
         self.max_health = 0
         self.damage = 0
         self.speed = 0
         self.kill_reward = 0
-        self.tier = "NORMAL"
+        self.tier = None
         
         # Special effects
         self.alpha = 255
@@ -35,28 +40,42 @@ class Enemy:
         # Death animation state
         self.death_animation_frame = 0
         self.death_animation_timer = 0
-        self.death_animation_duration = 15  # Slower animation (15 frames per animation frame)
-        self.frame_duration = 15  # How long each frame lasts
+        self.death_animation_duration = 15
+        self.frame_duration = 15
         self.corpse_alpha = 255
-        self.fade_start = 180  # Start fading after 3 seconds (reduced from 5)
-        self.fade_duration = 60  # Fade over 1 second
+        self.fade_start = 180
+        self.fade_duration = 60
         self.death_particles = []
         
-    def set_monster_type(self, tier):
-        """Set monster type based on tier"""
-        if tier == "WEAK":
-            monster_type = 1  # Slime
-        elif tier == "NORMAL":
-            monster_type = 0  # Skeleton
-        elif tier == "STRONG":
-            monster_type = 2  # Spider
-        elif tier == "ELITE":
-            monster_type = 3  # Demon
-        else:  # BOSS
-            monster_type = 4  # Ghost
-            
-        self.sprite, self.death_frames = self.monster_gen.generate_monster(monster_type)
-        self.has_special_movement = monster_type in [1, 3, 4]  # Slime, Demon, Ghost
+    def set_monster_type(self, monster_type):
+        """Set monster type and its associated properties"""
+        self.monster_type = monster_type
+        self.config = get_monster_config(self.monster_type)
+        
+        # Convert string tier to DifficultyTier enum
+        tier_str = self.config["tier"]
+        self.tier = DifficultyTier[tier_str]
+        
+        # Set stats from config
+        stats = self.config["base_stats"]
+        self.health = stats["health"]
+        self.max_health = stats["health"]
+        self.damage = stats["damage"]
+        self.speed = stats["speed"]
+        
+        # Generate sprite and death frames
+        type_index = list(MonsterType).index(self.monster_type)
+        self.sprite, self.death_frames = self.monster_gen.generate_monster(type_index)
+        
+        # Set special movement based on monster type
+        self.has_special_movement = self.monster_type in [
+            MonsterType.SLIME,  # Bouncing movement
+            MonsterType.BAT,    # Flying movement
+            MonsterType.GHOST,  # Phasing movement
+            MonsterType.DEMON,  # Teleporting
+            MonsterType.WITCH,  # Floating
+            MonsterType.DRAGON  # Flying
+        ]
         
     def draw(self, screen):
         if self.is_dead:
@@ -119,14 +138,14 @@ class Enemy:
             if self.corpse_alpha > 0:
                 corpse_sprite = self.sprite.copy()
                 corpse_sprite.set_alpha(self.corpse_alpha)
-                if self.tier == "WEAK":  # Slime flattens
+                if self.tier == DifficultyTier.BASIC:  # Slime flattens
                     scale_y = max(0.2, 1 - (self.death_animation_timer / 20))
                     scaled = pygame.transform.scale(corpse_sprite, 
                                                  (corpse_sprite.get_width(),
                                                   int(corpse_sprite.get_height() * scale_y)))
                     screen.blit(scaled, (self.rect.x, 
                                        self.rect.y + self.rect.height * (1 - scale_y)))
-                elif self.tier == "BOSS":  # Ghost dissipates
+                elif self.tier == DifficultyTier.BOSS:  # Ghost dissipates
                     wave = math.sin(self.death_animation_timer * 0.1) * 5
                     screen.blit(corpse_sprite, (self.rect.x + wave, self.rect.y))
                 else:  # Other enemies
@@ -135,7 +154,7 @@ class Enemy:
             # Draw sprite with special effects
             if self.sprite:
                 sprite = pygame.transform.flip(self.sprite, self.facing_left, False)
-                if self.tier == "BOSS":  # Ghost-like effect for bosses
+                if self.tier == DifficultyTier.BOSS:  # Ghost-like effect for bosses
                     ghost_sprite = sprite.copy()
                     ghost_sprite.set_alpha(self.alpha)
                     screen.blit(ghost_sprite, self.rect)
@@ -148,7 +167,7 @@ class Enemy:
             # Draw tier indicator (small circle above enemy)
             indicator_radius = 4
             indicator_pos = (self.rect.centerx, self.rect.top - 8)
-            indicator_color = ENEMY_TIERS[self.tier]["color"]
+            indicator_color = ENEMY_TIERS[self.tier.name]["color"]
             pygame.draw.circle(screen, indicator_color, indicator_pos, indicator_radius)
         
     def draw_health_bar(self, screen):
@@ -160,7 +179,7 @@ class Enemy:
         pygame.draw.rect(screen, RED, (*bar_pos, bar_width, bar_height))
         # Health (color based on tier)
         health_width = (self.health / self.max_health) * bar_width
-        tier_color = ENEMY_TIERS[self.tier]["color"]
+        tier_color = ENEMY_TIERS[self.tier.name]["color"]
         pygame.draw.rect(screen, tier_color, (*bar_pos, health_width, bar_height))
         
     def update(self, player_pos):
@@ -203,14 +222,14 @@ class Enemy:
             # Update special effects
             if self.has_special_movement:
                 self.special_timer += 1
-                if self.tier == "WEAK":  # Slime bounce
+                if self.tier == DifficultyTier.BASIC:  # Slime bounce
                     if self.special_timer % 30 == 0:  # Every half second
-                        self.speed = ENEMY_TIERS[self.tier]["speed"] * (1.5 if self.speed == ENEMY_TIERS[self.tier]["speed"] else 1)
-                elif self.tier == "ELITE":  # Demon teleport
+                        self.speed = ENEMY_TIERS[self.tier.name]["speed"] * (1.5 if self.speed == ENEMY_TIERS[self.tier.name]["speed"] else 1)
+                elif self.tier == DifficultyTier.ELITE:  # Demon teleport
                     if self.special_timer % 180 == 0:  # Every 3 seconds
                         self._teleport_towards(player_pos)
                         return
-                elif self.tier == "BOSS":  # Ghost phase
+                elif self.tier == DifficultyTier.BOSS:  # Ghost phase
                     self.alpha = 180 + math.sin(self.special_timer * 0.1) * 75
             
             # Calculate direction to player
@@ -273,79 +292,41 @@ class Enemy:
             self.rect.y = random.randint(0, SCREEN_HEIGHT - self.rect.height) 
         
     def _init_death_particles(self):
-        """Initialize death effect particles based on enemy type"""
-        if self.tier == "WEAK":  # Slime
-            # Slime splash particles
-            for _ in range(8):
-                angle = random.uniform(0, 360)
-                speed = random.uniform(1, 3)
-                self.death_particles.append({
-                    'x': self.rect.centerx,
-                    'y': self.rect.centery,
-                    'dx': math.cos(math.radians(angle)) * speed,
-                    'dy': math.sin(math.radians(angle)) * speed,
-                    'size': random.uniform(2, 4),
-                    'alpha': 255,
-                    'lifetime': random.randint(20, 40)
-                })
-        elif self.tier == "NORMAL":  # Skeleton
-            # Bone fragments
-            for _ in range(6):
-                angle = random.uniform(0, 360)
-                speed = random.uniform(2, 4)
-                self.death_particles.append({
-                    'x': self.rect.centerx,
-                    'y': self.rect.centery,
-                    'dx': math.cos(math.radians(angle)) * speed,
-                    'dy': math.sin(math.radians(angle)) * speed - 2,  # Initial upward velocity
-                    'size': random.uniform(3, 5),
-                    'alpha': 255,
-                    'lifetime': random.randint(30, 50),
+        """Initialize death effect particles based on monster type"""
+        if not self.monster_type:
+            return
+            
+        particle_config = get_death_config(self.monster_type)["particle_config"]
+        
+        for _ in range(particle_config["count"]):
+            angle = random.uniform(0, 360)
+            speed = random.uniform(*particle_config["speed"])
+            size = random.uniform(*particle_config["size"])
+            lifetime = random.randint(*particle_config["lifetime"])
+            
+            particle = {
+                'x': self.rect.centerx,
+                'y': self.rect.centery,
+                'dx': math.cos(math.radians(angle)) * speed,
+                'dy': math.sin(math.radians(angle)) * speed,
+                'size': size,
+                'alpha': 255,
+                'lifetime': lifetime
+            }
+            
+            # Add type-specific particle properties
+            if particle_config["type"] == "bone":
+                particle.update({
                     'rotation': random.uniform(0, 360),
                     'rot_speed': random.uniform(-10, 10)
                 })
-        elif self.tier == "STRONG":  # Spider
-            # Web-like particles
-            for _ in range(12):
-                angle = random.uniform(0, 360)
-                speed = random.uniform(1, 2)
-                self.death_particles.append({
-                    'x': self.rect.centerx,
-                    'y': self.rect.centery,
-                    'dx': math.cos(math.radians(angle)) * speed,
-                    'dy': math.sin(math.radians(angle)) * speed,
-                    'size': random.uniform(1, 3),
-                    'alpha': 255,
-                    'lifetime': random.randint(40, 60),
-                    'web': True
-                })
-        elif self.tier == "ELITE":  # Demon
-            # Fire and smoke particles
-            for _ in range(15):
-                angle = random.uniform(0, 360)
-                speed = random.uniform(1, 3)
-                self.death_particles.append({
-                    'x': self.rect.centerx,
-                    'y': self.rect.centery,
-                    'dx': math.cos(math.radians(angle)) * speed,
-                    'dy': math.sin(math.radians(angle)) * speed - random.uniform(1, 2),
-                    'size': random.uniform(3, 6),
-                    'alpha': 255,
-                    'lifetime': random.randint(30, 50),
-                    'color': random.choice([(255, 100, 0), (200, 50, 0), (150, 150, 150)])
-                })
-        else:  # Ghost (BOSS)
-            # Ethereal particles
-            for _ in range(20):
-                angle = random.uniform(0, 360)
-                speed = random.uniform(0.5, 1.5)
-                self.death_particles.append({
-                    'x': self.rect.centerx,
-                    'y': self.rect.centery,
-                    'dx': math.cos(math.radians(angle)) * speed,
-                    'dy': math.sin(math.radians(angle)) * speed,
-                    'size': random.uniform(2, 5),
-                    'alpha': 200,
-                    'lifetime': random.randint(50, 70),
-                    'pulse': random.uniform(0, math.pi)
-                }) 
+                particle['dy'] -= 2  # Initial upward velocity
+            elif particle_config["type"] == "web":
+                particle['web'] = True
+            elif particle_config["type"] == "fire":
+                particle['color'] = random.choice(particle_config["colors"])
+            elif particle_config["type"] == "ethereal":
+                particle['pulse'] = random.uniform(0, math.pi)
+                particle['alpha'] = 200
+            
+            self.death_particles.append(particle) 

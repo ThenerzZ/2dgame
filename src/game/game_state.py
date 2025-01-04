@@ -9,6 +9,13 @@ from graphics.character_generator import CharacterGenerator
 from ui.shop import Shop
 from ui.start_menu import StartMenu
 from ui.hud import HUD
+from game.monster_config import (
+    get_enemy_pool_for_round,
+    get_monster_stats,
+    MonsterType,
+    get_monster_config,
+    get_death_config
+)
 
 class GameState:
     def __init__(self):
@@ -226,51 +233,48 @@ class GameState:
         return current_weights or ENEMY_SPAWN_WEIGHTS[0][1]
 
     def spawn_enemy(self):
-        """Spawn a new enemy with tier-based stats and progressive scaling"""
+        """Spawn a new enemy with appropriate difficulty for current round"""
         if len(self.enemies) >= MAX_ENEMIES:
             return
             
-        # Get spawn weights for current round
-        weights = self.get_enemy_weights()
+        # Get weighted enemy pool for current round
+        enemy_pool = get_enemy_pool_for_round(self.current_round)
         
-        # Select enemy tier based on weights
-        total_weight = sum(weights.values())
+        # Calculate total weight
+        total_weight = sum(enemy['weight'] for enemy in enemy_pool)
+        
+        # Random selection based on weights
         roll = random.uniform(0, total_weight)
         current_weight = 0
-        selected_tier = None
         
-        for tier, weight in weights.items():
-            current_weight += weight
+        selected_type = None
+        for enemy in enemy_pool:
+            current_weight += enemy['weight']
             if roll <= current_weight:
-                selected_tier = tier
+                selected_type = enemy['type']
                 break
         
-        # Create enemy with tier stats
+        if selected_type is None:
+            return
+            
+        # Create enemy with scaled stats
         enemy = Enemy()
-        tier_stats = ENEMY_TIERS[selected_tier]
+        enemy.set_monster_type(selected_type)
         
-        # Set base stats from tier
-        enemy.health = tier_stats["health"]
-        enemy.max_health = tier_stats["health"]
-        enemy.damage = tier_stats["damage"]
-        enemy.speed = tier_stats["speed"]
-        enemy.kill_reward = tier_stats["reward"]
-        enemy.tier = selected_tier
+        # Scale stats based on round number
+        try:
+            scaled_stats = get_monster_stats(selected_type, self.current_round)
+            enemy.health = scaled_stats["health"]
+            enemy.max_health = scaled_stats["health"]
+            enemy.damage = scaled_stats["damage"]
+            enemy.speed = scaled_stats["speed"]
+            enemy.kill_reward = scaled_stats["exp_reward"]
+        except Exception as e:
+            print(f"Error scaling enemy stats: {e}")
+            print(f"Selected type: {selected_type}, Round: {self.current_round}")
+            return
         
-        # Set monster type and sprite based on tier
-        enemy.set_monster_type(selected_tier)
-        
-        # Apply round scaling
-        round_factor = self.current_round - 1
-        health_scale = 1 + (HEALTH_SCALING * round_factor)
-        damage_scale = 1 + (DAMAGE_SCALING * round_factor)
-        speed_scale = 1 + (SPEED_SCALING * round_factor)
-        
-        enemy.health *= health_scale
-        enemy.max_health *= health_scale
-        enemy.damage *= damage_scale
-        enemy.speed *= speed_scale
-        
+        # Add enemy to list
         self.enemies.append(enemy)
 
     def update_enemies(self):

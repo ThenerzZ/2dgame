@@ -92,21 +92,21 @@ REWARD_SCALING = 0.3  # Reward increases by 30% per round
 
 # Enemy Tiers
 ENEMY_TIERS = {
-    "WEAK": {
+    "BASIC": {
         "health": 40,
         "damage": 3,
         "speed": 2,
         "color": (150, 150, 150),  # Light gray
         "reward": 15
     },
-    "NORMAL": {
+    "STANDARD": {
         "health": 60,
         "damage": 5,
         "speed": 3,
         "color": (200, 100, 100),  # Light red
         "reward": 20
     },
-    "STRONG": {
+    "ADVANCED": {
         "health": 100,
         "damage": 8,
         "speed": 2.5,
@@ -133,37 +133,37 @@ ENEMY_TIERS = {
 # Format: (start_round, {enemy_type: spawn_weight})
 ENEMY_SPAWN_WEIGHTS = [
     (1, {  # Rounds 1-2
-        "WEAK": 100,
-        "NORMAL": 0,
-        "STRONG": 0,
+        "BASIC": 100,
+        "STANDARD": 0,
+        "ADVANCED": 0,
         "ELITE": 0,
         "BOSS": 0
     }),
     (3, {  # Rounds 3-4
-        "WEAK": 70,
-        "NORMAL": 30,
-        "STRONG": 0,
+        "BASIC": 70,
+        "STANDARD": 30,
+        "ADVANCED": 0,
         "ELITE": 0,
         "BOSS": 0
     }),
     (5, {  # Rounds 5-7
-        "WEAK": 40,
-        "NORMAL": 50,
-        "STRONG": 10,
+        "BASIC": 40,
+        "STANDARD": 50,
+        "ADVANCED": 10,
         "ELITE": 0,
         "BOSS": 0
     }),
     (8, {  # Rounds 8-9
-        "WEAK": 20,
-        "NORMAL": 40,
-        "STRONG": 30,
+        "BASIC": 20,
+        "STANDARD": 40,
+        "ADVANCED": 30,
         "ELITE": 10,
         "BOSS": 0
     }),
     (10, {  # Rounds 10+
-        "WEAK": 10,
-        "NORMAL": 30,
-        "STRONG": 40,
+        "BASIC": 10,
+        "STANDARD": 30,
+        "ADVANCED": 40,
         "ELITE": 15,
         "BOSS": 5
     })
